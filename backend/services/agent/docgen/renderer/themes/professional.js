@@ -1,6 +1,8 @@
 /** @type {import("./index.js").Theme} */
 export const professional = {
   name:          "professional",
+  mode:          "light",
+  chartSurface:  "#FFFFFF",
   accent:        "#2563EB",
   accentDark:    "#1D4ED8",
   accentLight:   "#EFF6FF",

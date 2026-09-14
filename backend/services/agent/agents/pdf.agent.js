@@ -53,6 +53,7 @@ export const pdfAgent = async (state) => {
       return {
         ...state,
         response: `❌ **${apiError.title}**\n\n${apiError.message ?? "Please upgrade your plan or wait before trying again."}`,
+        isError: true,
       };
     }
 
@@ -62,12 +63,14 @@ export const pdfAgent = async (state) => {
       return {
         ...state,
         response: "❌ **AI Rate Limit**\n\nThe AI service is temporarily rate-limited. Please wait 1 minute and try again.",
+        isError: true,
       };
     }
 
     return {
       ...state,
       response: "❌ Failed to generate PDF. Please try again.",
+        isError: true,
     };
   }
 };

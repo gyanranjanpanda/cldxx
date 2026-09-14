@@ -1,6 +1,8 @@
 /** @type {import("./index.js").Theme} */
 export const minimal = {
   name:          "minimal",
+  mode:          "light",
+  chartSurface:  "#FFFFFF",
   accent:        "#111827",
   accentDark:    "#000000",
   accentLight:   "#F9FAFB",

@@ -16,7 +16,10 @@ import connectDB from "./config/db.js";
 import router from "./routes/agent.route.js";
 const app = express();
 app.use(express.json());
-const port=process.env.PORT
+app.get("/", (req, res) => {
+  res.status(200).json({ service: "agent", status: "ok" });
+});
+const port = Number(process.env.PORT) || 8003;
 
 app.use("/",router);
 
@@ -44,8 +47,9 @@ app.use((err, req, res, next) => {
 
 });
 
-app.listen(port, () => {
-    connectDB()
+console.log("Agent starting on port:", port);
+app.listen(port, "0.0.0.0", () => {
+  connectDB();
   console.log(
     `agent service running on ${port}`
   );

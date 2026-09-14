@@ -27,6 +27,11 @@ import { renderTimeline,    timelineCss }    from "./components/timeline.js";
 import { renderCallout,     calloutCss }     from "./components/callout.js";
 import { renderDivider,     dividerCss }     from "./components/divider.js";
 import { renderConclusion,  conclusionCss }  from "./components/conclusion.js";
+import { renderChart,        chartCss }       from "./components/chart.js";
+import { renderComparison,   comparisonCss }  from "./components/comparison.js";
+import { renderTwoCol,       twoColCss }      from "./components/two_col.js";
+import { renderSteps,        stepsCss }       from "./components/steps.js";
+import { renderSectionBreak, sectionBreakCss } from "./components/section_break.js";
 
 /**
  * @typedef {{ render: Function, css: Function }} BlockEntry
@@ -53,6 +58,11 @@ export const registry = {
   callout:      { render: renderCallout,     css: calloutCss },
   divider:      { render: renderDivider,     css: dividerCss },
   conclusion:   { render: renderConclusion,  css: conclusionCss },
+  chart:         { render: renderChart,        css: chartCss },
+  comparison:    { render: renderComparison,   css: comparisonCss },
+  two_col:       { render: renderTwoCol,       css: twoColCss },
+  steps:         { render: renderSteps,        css: stepsCss },
+  section_break: { render: renderSectionBreak, css: sectionBreakCss },
 };
 
 /**

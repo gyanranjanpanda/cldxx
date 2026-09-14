@@ -1,46 +1,56 @@
 /**
- * Document Generation Pipeline — orchestrates the full flow:
+ * Document Generation Pipeline — the single entry point for both formats.
  *
- *   Planner → Writer (parallel) → Validator → Normalizer → Intelligence → Renderer → Exporter
+ *   Planner → Writer → Validator → Normalizer → Composer → Intelligence → Renderer → Exporter
+ *              (layout-aware)                    (new)
  *
- * This is the single entry point for document generation.
- * The pdf.agent.js becomes a thin wrapper that calls this.
+ * The planner commits to a layout per section, the writer writes into it under a
+ * word budget, and the composer groups the resulting blocks back into laid-out
+ * sections. PDF renders those sections to HTML and paginates by measurement;
+ * PPTX draws them straight to slides. Same tree, two media.
  */
 
 import { plan }             from "./agents/planner.agent.js";
 import { writeAllSections } from "./agents/writer.agent.js";
 import { validate }         from "./pipeline/validator.js";
 import { normalize }        from "./pipeline/normalizer.js";
+import { compose }          from "./pipeline/composer.js";
 import { enhance }          from "./pipeline/intelligence.js";
 import { renderDocument }   from "./renderer/render.js";
-import { exportDocument }   from "./exporters/index.js";
+import { exportDocument, HTML_FREE_FORMATS } from "./exporters/index.js";
 import { SCHEMA_VERSION }   from "./schemas/document.schema.js";
 import { bus }              from "./events/bus.js";
 
+/** Normalize the caller's format string to what the exporters register. */
+const FORMAT_ALIASES = { ppt: "pptx", pptx: "pptx", pdf: "pdf", markdown: "markdown", md: "markdown" };
+
 /**
  * @param {{ topic: string, theme?: string, format?: string, style?: string, jobId?: string }} opts
- * @returns {Promise<{ buffer: Buffer, doc: object, meta: { pages: number, format: string, title: string } }>}
+ * @returns {Promise<{ buffer: Buffer, doc: object, meta: { pages: number|string, format: string, title: string, sections: number } }>}
  */
 export async function generateDocument(opts) {
   const {
     topic,
     theme  = "professional",
-    format = "pdf",
     style  = "Professional",
     jobId  = `doc-${Date.now()}`,
   } = opts;
 
-  // ── 1. Plan ─────────────────────────────────────────────────────────────
-  const outline = await plan(topic, jobId);
+  const format = FORMAT_ALIASES[opts.format ?? "pdf"] ?? "pdf";
+  // Planning and word budgets differ between a page and a slide.
+  const medium = format === "pptx" ? "pptx" : "pdf";
 
-  // ── 2. Write (parallel) ─────────────────────────────────────────────────
+  // ── 1. Plan (layout-first) ──────────────────────────────────────────────
+  const outline = await plan(topic, { jobId, format: medium, style });
+
+  // ── 2. Write into those layouts ─────────────────────────────────────────
   const blocks = await writeAllSections(
     outline.sections,
-    { topic, style },
+    { topic, style, format: medium },
     jobId,
   );
 
-  // ── 3. Assemble raw document ────────────────────────────────────────────
+  // ── 3. Assemble ─────────────────────────────────────────────────────────
   const rawDoc = {
     version: SCHEMA_VERSION,
     meta: {
@@ -53,7 +63,6 @@ export async function generateDocument(opts) {
       { type: "cover", title: outline.title, subtitle: outline.subtitle },
       { type: "toc" },
       ...blocks,
-      // If no conclusion was written, add a minimal one
       ...(blocks.some((b) => b.type === "conclusion") ? [] : [{
         type: "conclusion",
         title: "Conclusion",
@@ -69,10 +78,8 @@ export async function generateDocument(opts) {
   if (validation.doc) {
     doc = validation.doc;
   } else {
-    // Soft-fail: strip blocks that failed validation, keep the rest
+    // Soft-fail: keep the blocks that pass, drop the ones that don't.
     console.warn(`[pipeline] Validation failed: ${validation.error}`);
-    console.warn("[pipeline] Attempting block-level recovery...");
-
     const { Block } = await import("./schemas/document.schema.js");
     const safeBlocks = rawDoc.blocks.filter((b) => Block.safeParse(b).success);
 
@@ -80,43 +87,44 @@ export async function generateDocument(opts) {
       throw new Error(`Document validation failed with too few valid blocks: ${validation.error}`);
     }
 
-    const recoveredDoc = { ...rawDoc, blocks: safeBlocks };
-    const revalidation = validate(recoveredDoc, jobId);
-    if (!revalidation.doc) {
-      throw new Error(`Document recovery failed: ${revalidation.error}`);
-    }
+    const revalidation = validate({ ...rawDoc, blocks: safeBlocks }, jobId);
+    if (!revalidation.doc) throw new Error(`Document recovery failed: ${revalidation.error}`);
     doc = revalidation.doc;
     console.log(`[pipeline] Recovered ${safeBlocks.length}/${rawDoc.blocks.length} blocks`);
   }
 
   // ── 5. Normalize ────────────────────────────────────────────────────────
-  const normalized = normalize(doc, jobId);
-  doc = normalized.doc;
+  doc = normalize(doc, jobId).doc;
 
   // ── 6. Intelligence ─────────────────────────────────────────────────────
   const enhanced = enhance(doc, jobId);
   doc = enhanced.doc;
 
-  // ── 7. Render ───────────────────────────────────────────────────────────
-  bus.emit("render.started", { jobId });
-  const html = renderDocument(doc);
-  bus.emit("render.finished", { jobId, htmlSize: html.length });
+  // ── 7. Compose into laid-out sections ───────────────────────────────────
+  doc = compose(doc, outline.sections, { jobId, format: medium }).doc;
 
-  // ── 8. Export ───────────────────────────────────────────────────────────
-  const buffer = await exportDocument({
-    type: format,
-    html,
-    document: doc,
-    jobId,
-  });
+  // ── 8. Render (HTML formats only) ───────────────────────────────────────
+  let html;
+  if (!HTML_FREE_FORMATS.has(format)) {
+    bus.emit("render.started", { jobId });
+    html = renderDocument(doc);
+    bus.emit("render.finished", { jobId, htmlSize: html.length });
+  }
+
+  // ── 9. Export ───────────────────────────────────────────────────────────
+  const buffer = await exportDocument({ type: format, html, document: doc, jobId });
 
   return {
     buffer,
     doc,
     meta: {
-      pages: enhanced.suggestions.find((s) => s.startsWith("Estimated"))?.match(/\d+/)?.[0] ?? "?",
+      // The exporters attach a real count; the estimate is only a fallback.
+      pages: buffer.pageCount
+        ?? enhanced.suggestions.find((s) => s.startsWith("Estimated"))?.match(/\d+/)?.[0]
+        ?? "?",
       format,
       title: doc.meta.title,
+      sections: doc.sections?.length ?? 0,
     },
   };
 }

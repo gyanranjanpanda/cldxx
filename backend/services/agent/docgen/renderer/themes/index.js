@@ -1,6 +1,8 @@
 /** @type {import("./index.js").Theme} */
 export const github = {
   name:          "github",
+  mode:          "light",
+  chartSurface:  "#F6F8FA",
   accent:        "#0969DA",
   accentDark:    "#0550AE",
   accentLight:   "#DDF4FF",
@@ -42,6 +44,8 @@ export function getTheme(name) {
 /**
  * @typedef {object} Theme
  * @property {string} name
+ * @property {"light"|"dark"} mode          — picks the chart palette column
+ * @property {string} chartSurface          — the color charts actually sit on
  * @property {string} accent
  * @property {string} accentDark
  * @property {string} accentLight

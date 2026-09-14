@@ -1,10 +1,15 @@
-import { useState } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useSelector } from "react-redux";
 import Editor from "@monaco-editor/react";
 import { FiCode } from "react-icons/fi";
 import { detectLanguage } from "../utils/detectLanguage";
+import { buildPreviewDoc } from "../utils/buildPreviewDoc";
 import { Code2, Eye, PanelRightClose, PanelRightOpen, X, Copy, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+
+// Shared empty array so the memo below keeps a stable dependency when there is
+// no artifact yet; a fresh [] each render would recompute forever.
+const NO_FILES = [];
 
 export default function ArtifactPanel() {
   const [tab, setTab]               = useState("code");
@@ -16,26 +21,36 @@ export default function ArtifactPanel() {
   const { artifacts } = useSelector(state => state.message);
   const artifact = artifacts?.[0];
 
+  const files    = artifact?.files ?? NO_FILES;
+  const htmlFile = files.find(f => /\.html$/i.test(f.name) && /index/i.test(f.name))
+                ?? files.find(f => /\.html$/i.test(f.name));
+
+  // Every hook has to run before the early return below. Putting this after it
+  // changes the hook count the moment an artifact arrives, which unmounts the
+  // whole app rather than just this panel.
+  const previewDoc = useMemo(
+    () => buildPreviewDoc(files, htmlFile),
+    [files, htmlFile]
+  );
+
+  // A generated game listens on its own window, so the iframe has to hold
+  // focus or arrow keys go to this document instead and nothing moves. Without
+  // this the user has to click the preview first, which nothing tells them.
+  const iframeRef = useRef(null);
+  const focusPreview = () => iframeRef.current?.contentWindow?.focus();
+
+  useEffect(() => {
+    if (tab !== "preview") return;
+    const id = setTimeout(focusPreview, 120);
+    return () => clearTimeout(id);
+  }, [tab, previewDoc]);
+
+  // Keep every hook above this line -- returning earlier changes the hook count
+  // the moment an artifact arrives and unmounts the whole app.
   if (!artifact) return null;
 
-  const file       = artifact?.files?.[activeFile];
-  const htmlFile   = artifact?.files?.find(f => f.name === "index.html");
-  const cssFile    = artifact?.files?.find(f => f.name === "style.css");
-  const jsFile     = artifact?.files?.find(f => f.name === "script.js");
+  const file       = files[activeFile];
   const canPreview = Boolean(htmlFile);
-
-  const previewDoc = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<style>${cssFile?.content || ""}</style>
-</head>
-<body>
-${htmlFile?.content || ""}
-<script>${jsFile?.content || ""}<\/script>
-</body>
-</html>`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(file?.content || "");
@@ -45,7 +60,11 @@ ${htmlFile?.content || ""}
 
 
 
-  /* ── Shared code panel content ── */
+  /* ── Shared code panel content ──
+     Called as a plain function below, never as a JSX element. As an element it
+     would be a brand-new component type every render, so React would
+     unmount and remount the subtree -- reloading the iframe and restarting the
+     running preview on every unrelated state change (tab, copy, collapse). */
   const PanelContent = ({ onClose }) => (
     <div className="flex flex-col h-full bg-[#0d0f14]">
 
@@ -130,7 +149,14 @@ ${htmlFile?.content || ""}
         <AnimatePresence mode="wait">
           {tab === "preview" && canPreview ? (
             <motion.div key="preview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="w-full h-full">
-              <iframe title="preview" sandbox="allow-scripts" srcDoc={previewDoc} className="w-full h-full bg-white" />
+              <iframe
+                ref={iframeRef}
+                title="preview"
+                sandbox="allow-scripts"
+                srcDoc={previewDoc}
+                onLoad={focusPreview}
+                className="w-full h-full bg-white"
+              />
             </motion.div>
           ) : (
             <motion.div key={`code-${activeFile}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="w-full h-full">
@@ -162,7 +188,7 @@ ${htmlFile?.content || ""}
           <>
             <motion.div key="mob-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} onClick={() => setMobileOpen(false)} className="lg:hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
             <motion.div key="mob-drawer" initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ duration: 0.25, ease: "easeInOut" }} className="lg:hidden fixed inset-y-0 right-0 z-50 w-[88vw] max-w-[420px] border-l border-white/[0.06] overflow-hidden">
-              <PanelContent onClose={() => setMobileOpen(false)} />
+              {PanelContent({ onClose: () => setMobileOpen(false) })}
             </motion.div>
           </>
         )}
@@ -171,7 +197,7 @@ ${htmlFile?.content || ""}
       <AnimatePresence initial={false}>
         {!collapsed ? (
           <motion.div key="open" initial={{ width: 0, opacity: 0 }} animate={{ width: "clamp(340px, 38%, 680px)", opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ duration: 0.22, ease: "easeInOut" }} className="hidden lg:flex h-full border-l border-white/[0.06] flex-col overflow-hidden shrink-0">
-            <PanelContent />
+            {PanelContent({})}
           </motion.div>
         ) : (
           <motion.div key="collapsed" initial={{ width: 0, opacity: 0 }} animate={{ width: 48, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ duration: 0.22, ease: "easeInOut" }} className="hidden lg:flex h-full border-l border-white/[0.06] bg-[#0d0f14] flex-col items-center py-4 gap-3 shrink-0">

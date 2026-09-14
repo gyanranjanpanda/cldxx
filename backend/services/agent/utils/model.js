@@ -13,14 +13,18 @@ export const getModel = (agent) => {
           apiKey: process.env.OPENROUTER_API_KEY,
           model: "deepseek/deepseek-chat",
           temperature: 0,
-          maxTokens: 2500,
+          maxTokens: Number(process.env.CODING_MAX_TOKENS) || 16000,
         });
       }
+      // A whole project has to fit in one reply, and gpt-oss spends part of its
+      // budget on reasoning tokens before it emits any code -- too small a cap
+      // truncates the last file mid-function.
       return new ChatGroq({
         apiKey: process.env.GROQ_API_KEY,
-        model: "llama-3.3-70b-versatile",
+        model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
         temperature: 0,
         maxRetries: 2,
+        maxTokens: Number(process.env.CODING_MAX_TOKENS) || 16000,
       });
 
     // PDF and PPT require reliable structured JSON output.
@@ -45,7 +49,7 @@ export const getModel = (agent) => {
     default:
       return new ChatGroq({
         apiKey: process.env.GROQ_API_KEY,
-        model: "llama-3.3-70b-versatile",
+        model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
         temperature: 0,
         maxRetries: 2,
       });

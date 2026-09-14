@@ -1,7 +1,7 @@
 import redis from "../../../shared/redis/redis.js";
 import { graph } from "../graph/supervisor.graph.js";
 import { addMessage } from "../utils/memory.js";
-import axios from "axios"
+import { internalApi } from "../utils/internalApi.js"
 
 export const chat =
 async(req,res,next)=>{
@@ -14,7 +14,9 @@ async(req,res,next)=>{
 
    conversationId,
 
-   agent
+   agent,
+
+   timezone
 
 } = req.body;
 
@@ -27,7 +29,7 @@ await addMessage(
  prompt
 );
 
-await axios.post(`${process.env.CHAT_SERVICE}/save-message`,{
+await internalApi.post(`/save-message`,{
   conversationId,
   role:"user",
   content:prompt
@@ -51,6 +53,7 @@ await axios.post(`${process.env.CHAT_SERVICE}/save-message`,{
     "x-user-id"
    ],
    agent,
+   timezone,
    file:req.file
 
   });
@@ -58,22 +61,30 @@ await axios.post(`${process.env.CHAT_SERVICE}/save-message`,{
 
   console.log("after res",result)
 
-  await addMessage(
- conversationId,
- "assistant",
- result.response
-);
-await axios.post(
- `${process.env.CHAT_SERVICE}/save-message`,
- {
-  conversationId,
-  role:"assistant",
-  content:result.response,
-  images:result.images,
-  artifacts:
-  result.artifacts || []
- }
-)
+  // Credit / rate-limit failures are transient, not part of the conversation.
+  // Persisting them left "Insufficient Credits" in the history for good, and
+  // fed the failure back to the model as context on every later turn.
+  if(!result.isError){
+
+   await addMessage(
+    conversationId,
+    "assistant",
+    result.response
+   );
+
+   await internalApi.post(
+    `/save-message`,
+    {
+     conversationId,
+     role:"assistant",
+     content:result.response,
+     images:result.images,
+     artifacts:
+     result.artifacts || []
+    }
+   )
+
+  }
 
   return res.json({
 

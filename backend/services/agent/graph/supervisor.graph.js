@@ -36,6 +36,7 @@ import { pptAgent } from "../agents/ppt.agent.js";
 import { imageAgent } from "../agents/imageGen.agent.js";
 import { visionAgent } from "../agents/vision.agent.js";
 import { pdfRagAgent } from "../agents/pdfRag.agent.js";
+import { githubRagAgent } from "../agents/githubRag.agent.js";
 
 const workflow =
 new StateGraph(
@@ -82,6 +83,11 @@ workflow.addNode(
  "pdf_rag",
  pdfRagAgent
 );
+workflow.addNode(
+ "github",
+ githubRagAgent
+);
+
 workflow.addEdge(
  "__start__",
  "router"
@@ -115,6 +121,9 @@ workflow.addConditionalEdges(
     case "pdf_rag":
     return "pdf_rag";
 
+    case "github":
+    return "github";
+
    default:
     return "chat";
 
@@ -134,7 +143,8 @@ workflow.addConditionalEdges(
    ppt:"ppt",
    image:"image",
    vision:"vision",
-   pdf_rag:"pdf_rag"
+   pdf_rag:"pdf_rag",
+   github:"github"
 
  }
 
@@ -175,6 +185,11 @@ workflow.addEdge(
 
 workflow.addEdge(
     "pdf_rag",
+    "__end__"
+);
+
+workflow.addEdge(
+    "github",
     "__end__"
 );
 

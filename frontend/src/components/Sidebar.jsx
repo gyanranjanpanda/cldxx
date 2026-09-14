@@ -1,16 +1,20 @@
 import { useEffect, useState } from "react";
-import { Plus, MessageSquare, Settings, LogOut, User, PenSquare, Menu, X, Coins, ConeIcon, CoinsIcon } from "lucide-react";
+import { Plus, MessageSquare, Settings, LogOut, User, PenSquare, Menu, X, Coins, ConeIcon, CoinsIcon, Trash2, Check, Loader2 } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import api from "../utils/axios";
 import { setUserData } from "../redux/user.slice";
-import { createConversation, getConversations } from "../features/conversation.api";
-import { addConversation, setConversations, setSelectedConversation } from "../redux/conversation.slice";
+import { createConversation, deleteConversation, getConversations } from "../features/conversation.api";
+import { addConversation, removeConversation, setConversations, setSelectedConversation } from "../redux/conversation.slice";
 import { getMessages } from "../features/message.api";
 import { setArtifacts, setMessages } from "../redux/message.slice";
   import BillingDrawer from "./BillingDrawer";
 
 export default function Sidebar() {
   const [hovered, setHovered]     = useState(null);
+  // Deleting is irreversible, so the trash icon arms a confirm step rather than
+  // firing straight away — a stray click in a list is far too easy.
+  const [confirmingId, setConfirmingId] = useState(null);
+  const [deletingId, setDeletingId]     = useState(null);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
  const [imageError,setImageError]=useState(false)
@@ -44,6 +48,25 @@ const [showBilling, setShowBilling] =useState(false);
     dispatch(setMessages([]));
     dispatch(setArtifacts([]));
     setMobileOpen(false);
+  };
+
+  const handleDeleteConversation = async (conversationId) => {
+    setDeletingId(conversationId);
+    try {
+      await deleteConversation(conversationId);
+      const wasOpen = selectedConversation?._id === conversationId;
+      dispatch(removeConversation(conversationId));
+      // The open conversation just vanished, so clear what it was rendering.
+      if (wasOpen) {
+        dispatch(setMessages([]));
+        dispatch(setArtifacts([]));
+      }
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setDeletingId(null);
+      setConfirmingId(null);
+    }
   };
 
   const handleSelectConversation = async (conversation) => {
@@ -148,7 +171,7 @@ const [showBilling, setShowBilling] =useState(false);
       <div className="px-4 pt-4 pb-1">
         <button
           onClick={handleCreateConversation}
-          className="w-full flex items-center justify-center gap-2 text-sm font-medium text-white bg-gradient-to-br from-indigo-500 to-violet-700 rounded-xl py-[10px] border-none cursor-pointer hover:opacity-90 transition-opacity duration-150"
+          className="w-full flex items-center justify-center gap-2 text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 rounded-xl py-[10px] border-none cursor-pointer shadow-lg shadow-purple-600/25 transition-all duration-150 active:scale-[0.98]"
         >
           <Plus size={15} />
           New Chat
@@ -184,8 +207,8 @@ const [showBilling, setShowBilling] =useState(false);
               key={chat._id}
               onClick={() => handleSelectConversation(chat)}
               onMouseEnter={() => setHovered(chat._id)}
-              onMouseLeave={() => setHovered(null)}
-              className={`flex items-center gap-2.5 cursor-pointer mb-0.5 px-3 py-2.5 rounded-[10px] border transition-colors duration-150
+              onMouseLeave={() => { setHovered(null); setConfirmingId(null); }}
+              className={`group flex items-center gap-2.5 cursor-pointer mb-0.5 px-3 py-2.5 rounded-[10px] border transition-colors duration-150
                 ${isActive ? "bg-indigo-500/10 border-indigo-500/[0.18]"
                 : isHov   ? "bg-white/[0.05] border-transparent"
                 :            "bg-transparent border-transparent"}`}
@@ -194,9 +217,39 @@ const [showBilling, setShowBilling] =useState(false);
                 ${isActive ? "bg-indigo-500/15 text-indigo-400" : "bg-white/[0.05] text-slate-500"}`}>
                 <MessageSquare size={13} />
               </div>
-              <p className={`text-[13px] font-medium truncate ${isActive ? "text-slate-100" : "text-slate-300"}`}>
+              <p className={`flex-1 min-w-0 text-[13px] font-medium truncate ${isActive ? "text-slate-100" : "text-slate-300"}`}>
                 {chat.title}
               </p>
+
+              {deletingId === chat._id ? (
+                <Loader2 size={13} className="shrink-0 animate-spin text-slate-500" />
+              ) : confirmingId === chat._id ? (
+                <span className="flex shrink-0 items-center gap-0.5">
+                  <button
+                    title="Confirm delete"
+                    onClick={(e) => { e.stopPropagation(); handleDeleteConversation(chat._id); }}
+                    className="flex items-center justify-center w-6 h-6 rounded-md border-none bg-red-500/15 text-red-400 cursor-pointer hover:bg-red-500/25 transition-colors duration-150"
+                  >
+                    <Check size={12} />
+                  </button>
+                  <button
+                    title="Cancel"
+                    onClick={(e) => { e.stopPropagation(); setConfirmingId(null); }}
+                    className="flex items-center justify-center w-6 h-6 rounded-md border-none bg-white/[0.06] text-slate-400 cursor-pointer hover:bg-white/[0.12] transition-colors duration-150"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              ) : (
+                <button
+                  title="Delete conversation"
+                  onClick={(e) => { e.stopPropagation(); setConfirmingId(chat._id); }}
+                  className={`flex shrink-0 items-center justify-center w-6 h-6 rounded-md border-none bg-transparent text-slate-600 cursor-pointer hover:bg-white/[0.08] hover:text-red-400 transition-all duration-150
+                    ${isHov || isActive ? "opacity-100" : "opacity-0"}`}
+                >
+                  <Trash2 size={12} />
+                </button>
+              )}
             </div>
           );
         })}

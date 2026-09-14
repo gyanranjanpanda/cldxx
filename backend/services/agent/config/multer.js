@@ -36,15 +36,25 @@ const storage = multer.diskStorage({
 
 });
 
+// Anything here must also be handled by utils/extractText.js (or be an image,
+// which goes to the vision agent instead).
+const DOC_EXTENSIONS = /\.(pdf|docx|txt|md|markdown|csv|tsv|json|log|ya?ml|xml|html?)$/i;
+
+const DOC_MIMETYPES = new Set([
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/json",
+    "application/xml"
+]);
+
 const fileFilter=(req,file,cb)=>{
 
-    if(
+    const isImage = file.mimetype.startsWith("image/");
+    const isText  = file.mimetype.startsWith("text/");
+    const isDoc   = DOC_MIMETYPES.has(file.mimetype) ||
+                    DOC_EXTENSIONS.test(file.originalname || "");
 
-        file.mimetype==="application/pdf" ||
-
-        file.mimetype.startsWith("image/")
-
-    ){
+    if(isImage || isText || isDoc){
 
         cb(null,true);
 
@@ -56,7 +66,7 @@ const fileFilter=(req,file,cb)=>{
 
             new Error(
 
-                "Only PDF and Images are allowed."
+                "Unsupported file type. Upload an image, PDF, Word document or text file."
 
             )
 

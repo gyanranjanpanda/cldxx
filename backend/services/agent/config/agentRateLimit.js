@@ -8,7 +8,9 @@ const LIMITS = {
   pdf: 5,
   ppt: 5,
   image: 3,
-  search:5
+  search:5,
+  // A cold scan downloads and embeds a whole repository.
+  github: 3
 };
 
 export const checkAgentLimit = async (userId, agent) => {

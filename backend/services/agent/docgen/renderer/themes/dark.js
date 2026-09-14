@@ -1,6 +1,8 @@
 /** @type {import("./index.js").Theme} */
 export const dark = {
   name:          "dark",
+  mode:          "dark",
+  chartSurface:  "#0F172A",
   accent:        "#818CF8",
   accentDark:    "#6366F1",
   accentLight:   "#1E1B4B",

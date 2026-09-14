@@ -63,33 +63,87 @@ ${state.prompt}
         enhancedPrompt
       )}`;
 
-    const imageResponse =
-      await axios.get(
-        imageUrl,
-        {
-          responseType:
-            "arraybuffer"
-        }
+    // The upstream service is free and flaky, so a slow reply is normal and a
+    // hung one used to block the request forever -- there was no timeout at all.
+    let imageResponse = null;
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+
+      imageResponse = await axios
+        .get(imageUrl, {
+          responseType: "arraybuffer",
+          timeout: 90000,
+          validateStatus: () => true
+        })
+        .catch((err) => {
+          lastError = err;
+          return null;
+        });
+
+      if (imageResponse && imageResponse.status === 200) break;
+
+      lastError =
+        lastError ||
+        new Error(`image service returned ${imageResponse?.status}`);
+
+      imageResponse = null;
+
+      if (attempt < 3) {
+        await new Promise((r) => setTimeout(r, attempt * 2000));
+      }
+    }
+
+    if (!imageResponse) {
+      throw new Error(
+        `The image service did not respond (${lastError?.message || "unknown error"}).`
       );
+    }
 
     const imageBuffer =
       Buffer.from(
         imageResponse.data
       );
 
+    // Previously anything with a 200 was uploaded and announced as a success,
+    // so an HTML error page was happily stored and shown as a broken image.
+    const contentType =
+      String(imageResponse.headers["content-type"] || "");
+
+    const magic = imageBuffer.slice(0, 3).toString("hex");
+    const isJpeg = magic === "ffd8ff";
+    const isPng = imageBuffer.slice(0, 4).toString("hex") === "89504e47";
+
+    if (!contentType.startsWith("image/") || (!isJpeg && !isPng)) {
+      throw new Error("The image service returned something that is not an image.");
+    }
+
+    // A real generation is tens of kilobytes; anything this small is an error
+    // graphic rather than a picture.
+    if (imageBuffer.length < 2048) {
+      throw new Error("The image service returned an empty image.");
+    }
+
+    // The service answers with JPEG, but this was hardcoded to .png/image/png,
+    // so every stored object was mislabelled.
+    const extension = isPng ? "png" : "jpg";
+    const mimeType = isPng ? "image/png" : "image/jpeg";
+
     const fileName =
-      `image-${Date.now()}.png`;
+      `image-${Date.now()}.${extension}`;
 
     await uploadToS3(
       imageBuffer,
       fileName,
-      "image/png"
+      mimeType
     );
+
+    const LINK_TTL_SECONDS = 24 * 60 * 60;
 
     const downloadUrl =
       await getDownloadUrl(
         fileName,
-        24*60*60
+        LINK_TTL_SECONDS
       );
 
     return {
@@ -103,7 +157,7 @@ ${state.prompt}
 
 📥 [Download Image](${downloadUrl})
 
-⏳ Link expires in 10 minutes.
+⏳ Link expires in ${LINK_TTL_SECONDS / 3600} hours.
 `
 
     };
@@ -120,6 +174,7 @@ ${state.prompt}
       return {
         ...state,
         response: `❌ **${apiError.title}**\n\n${apiError.message ?? "Please upgrade your plan or wait before trying again."}`,
+        isError: true,
       };
     }
 
@@ -127,8 +182,14 @@ ${state.prompt}
 
       ...state,
 
+      // Say what actually went wrong: the old message claimed nothing more than
+      // "try again" even when the service had returned a non-image.
       response:
-        "❌ Failed to generate image. Please try again."
+        `❌ **Image generation failed**\n\n${
+          error?.message || "The image service could not produce an image."
+        }\n\nTry rephrasing the description, or try again in a moment.`,
+
+      isError: true
 
     };
 

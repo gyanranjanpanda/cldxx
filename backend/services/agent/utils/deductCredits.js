@@ -1,4 +1,4 @@
-import axios from "axios";
+import { internalApi } from "./internalApi.js";
 
 export const deductCredits = async (
 
@@ -10,9 +10,9 @@ export const deductCredits = async (
 
     try {
 
-        await axios.patch(
+        await internalApi.patch(
 
-            `${process.env.AUTH_SERVICE}/internal/deduct-credits`,
+            "/deduct-credits",
 
             {
 

@@ -12,25 +12,21 @@ export const messageSlice = createSlice({
   initialState,
   reducers: {
     setMessages:(state,action)=>{
+      state.messages = Array.isArray(action.payload) ? action.payload : [];
+    },
 
-   state.messages =action.payload;
-
-  },
-
-  addMessage:(state,action)=>{
-
-   state.messages.push(action.payload);
-
-  },
-   setIsLoading:(state,action)=>{
-
-   state.isLoading=action.payload;
-
-  },
-  setArtifacts: (state, action) => {
-  state.artifacts = action.payload;
-}
- 
+    addMessage:(state,action)=>{
+      if (!Array.isArray(state.messages)) state.messages = [];
+      if (action.payload) {
+        state.messages.push(action.payload);
+      }
+    },
+    setIsLoading:(state,action)=>{
+      state.isLoading=action.payload;
+    },
+    setArtifacts: (state, action) => {
+      state.artifacts = Array.isArray(action.payload) ? action.payload : [];
+    }
   },
 })
 

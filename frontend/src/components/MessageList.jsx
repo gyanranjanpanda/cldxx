@@ -104,8 +104,12 @@ useEffect(() => {
 }, [messages.length, isLoading]);
   useEffect(() => {
     if (selectedConversation?.title === "New Chat") return;
+    // Nothing is selected on first load. Without this the effect requested
+    // /get-messages/undefined, which Mongo rejects as an invalid ObjectId --
+    // a 500 and an unhandled axios rejection on every visit.
+    if (!selectedConversation?._id) return;
     const get = async () => {
-      const data = await getMessages(selectedConversation?._id);
+      const data = await getMessages(selectedConversation._id);
       dispatch(setMessages(data));
       const latestArtifactMessage =
   [...data]
@@ -130,7 +134,7 @@ if (latestArtifactMessage) {
   }, [selectedConversation?._id]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 space-y-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {messages.length === 0 && !isLoading ? (
         <div className="h-full flex flex-col items-center justify-center gap-4 text-center">
           <div className="flex flex-col gap-1.5">

@@ -1,12 +1,12 @@
-import axios from "axios";
+import { internalApi } from "./internalApi.js";
 
 export const getConversationHistory =
 async(conversationId)=>{
 
  const response =
- await axios.get(
+ await internalApi.get(
 
- `${process.env.CHAT_SERVICE}/get-messages/${conversationId}`
+ `/get-messages/${conversationId}`
 
  );
 

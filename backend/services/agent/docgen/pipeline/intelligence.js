@@ -21,20 +21,10 @@ export function enhance(doc, jobId = "") {
   const suggestions = [];
   let blocks = [...doc.blocks];
 
-  // 1. Insert dividers before H1 headings (except the first one after cover/toc)
-  let firstContentHeadingSeen = false;
-  const withDividers = [];
-  for (const block of blocks) {
-    if (block.type === "heading" && block.level === 1) {
-      if (firstContentHeadingSeen) {
-        withDividers.push({ type: "divider" });
-        suggestions.push(`Inserted divider before heading: "${block.text}"`);
-      }
-      firstContentHeadingSeen = true;
-    }
-    withDividers.push(block);
-  }
-  blocks = withDividers;
+  // 1. Section separation is the composer's job now — every section starts on its
+  //    own page and major parts get a full-bleed break. Inserting rules between
+  //    H1s on top of that produced stray hairlines floating outside the page box,
+  //    so this layer no longer touches structure ahead of composition.
 
   // 2. Detect long consecutive paragraph runs (3+) → suggest bullets
   let consecutiveParagraphs = 0;

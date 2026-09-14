@@ -31,10 +31,25 @@ Annotation.Root({
  searchResults:
  Annotation(),
 
+ // The browser's IANA zone. Without it the chat agent has no "now" to give the
+ // model, which is why time-shaped questions were answered "I don't have
+ // access to live data" even with Search on.
+ timezone:
+ Annotation(),
+
  codeContext:
  Annotation(),
 
  pdfContext:
+ Annotation(),
+
+ // Undeclared keys are dropped by LangGraph, so searchError never reached the
+ // chat agent and its "search failed" branch was unreachable.
+ searchError:
+ Annotation(),
+
+ // Marks a response as an error so the controller can skip persisting it.
+ isError:
  Annotation()
 
 });

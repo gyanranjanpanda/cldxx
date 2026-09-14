@@ -176,6 +176,59 @@ const ConclusionBlock = z.object({
   points: z.array(M).min(1).max(10),
 });
 
+// ─── Chart ────────────────────────────────────────────────────────────────────
+// Numbers get drawn, not listed. `values` is parallel to `categories`.
+const ChartBlock = z.object({
+  type:       z.literal("chart"),
+  chart_type: z.enum(["bar", "column", "line", "donut", "progress"]).default("column"),
+  title:      S.optional(),
+  subtitle:   S.optional(),
+  unit:       esc(24).optional(),          // "%", "ms", "$" — suffixed onto labels
+  categories: z.array(S).min(1).max(12),
+  series:     z.array(z.object({
+    name:   S,
+    values: z.array(z.number()).min(1).max(12),
+  })).min(1).max(8),
+  takeaway:   M.optional(),                // the one sentence the chart is making
+});
+
+// ─── Comparison (A vs B) ──────────────────────────────────────────────────────
+const ComparisonBlock = z.object({
+  type:  z.literal("comparison"),
+  title: S.optional(),
+  left:  z.object({ title: S, items: z.array(M).min(1).max(6) }),
+  right: z.object({ title: S, items: z.array(M).min(1).max(6) }),
+});
+
+// ─── Two-column idea clusters ─────────────────────────────────────────────────
+const TwoColBlock = z.object({
+  type:    z.literal("two_col"),
+  title:   S.optional(),
+  columns: z.array(z.object({
+    title: S,
+    text:  M.optional(),
+    items: z.array(M).max(6).default([]),
+  })).length(2),
+});
+
+// ─── Ordered process ──────────────────────────────────────────────────────────
+const StepsBlock = z.object({
+  type:  z.literal("steps"),
+  title: S.optional(),
+  steps: z.array(z.object({
+    title:       S,
+    description: M.optional(),
+  })).min(2).max(6),
+});
+
+// ─── Full-bleed section divider ───────────────────────────────────────────────
+const SectionBreakBlock = z.object({
+  type:     z.literal("section_break"),
+  title:    S,
+  subtitle: S.optional(),
+  number:   esc(8).optional(),
+});
+
 // ─── Image block (for Asset Manager — Phase 2) ────────────────────────────────
 const ImageBlock = z.object({
   type:    z.literal("image"),
@@ -207,8 +260,26 @@ export const Block = z.discriminatedUnion("type", [
   CalloutBlock,
   DividerBlock,
   ConclusionBlock,
+  ChartBlock,
+  ComparisonBlock,
+  TwoColBlock,
+  StepsBlock,
+  SectionBreakBlock,
   ImageBlock,
 ]);
+
+// ─── Section ──────────────────────────────────────────────────────────────────
+// A section is the unit of LAYOUT. The writer emits flat blocks; the composer
+// groups them into sections and hands each one to a layout. The HTML renderer
+// turns a section into one or more pages; the PPTX exporter turns the same
+// section into one or more slides. One tree, two media.
+export const SectionSchema = z.object({
+  id:     z.string().max(60),
+  title:  S.optional(),
+  layout: z.string().max(30).default("bullets"),
+  blocks: z.array(Block).min(1).max(30),
+  notes:  L.optional(),          // speaker notes — PPTX only, ignored by PDF
+});
 
 // ─── Top-level document ───────────────────────────────────────────────────────
 
@@ -220,10 +291,14 @@ export const DocumentSchema = z.object({
     theme:   z.enum(["professional", "dark", "minimal", "github"]).default("professional"),
     subject: S.optional(),
   }),
-  blocks: z.array(Block).min(1).max(200),
+  blocks:   z.array(Block).min(1).max(200),
+  // Populated by the composer. Renderers prefer `sections` and fall back to the
+  // flat `blocks` stream, so a document that skipped composition still renders.
+  sections: z.array(SectionSchema).max(60).optional(),
 });
 
 /** @typedef {import("zod").infer<typeof DocumentSchema>} Document */
+/** @typedef {import("zod").infer<typeof SectionSchema>} Section */
 /** @typedef {import("zod").infer<typeof Block>} Block */
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

@@ -11,13 +11,15 @@ export const conversationSlice = createSlice({
   initialState,
   reducers: {
      setConversations:(state,action)=>{
-   state.conversations=action.payload;
+   state.conversations = Array.isArray(action.payload) ? action.payload : [];
 
   },
 
   addConversation:(state,action)=>{
-
-   state.conversations.unshift(action.payload);
+   if (!Array.isArray(state.conversations)) state.conversations = [];
+   if (action.payload) {
+     state.conversations.unshift(action.payload);
+   }
 
   },
 
@@ -26,6 +28,28 @@ export const conversationSlice = createSlice({
    state.selectedConversation =action.payload;
 
   },
+removeConversation:(state,action)=>{
+
+ const conversationId = action.payload;
+
+ state.conversations =
+ state.conversations.filter((conv)=>
+  conv._id !== conversationId
+ );
+
+ // Deleting whatever is open has to clear the selection too, otherwise the
+ // message list keeps fetching a conversation that no longer exists.
+ if(
+  state.selectedConversation?._id ===
+  conversationId
+ ){
+
+  state.selectedConversation = null;
+
+ }
+
+},
+
 setConvTitle:(state,action)=>{
 
  const {
@@ -62,6 +86,6 @@ setConvTitle:(state,action)=>{
 })
 
 // Action creators are generated for each case reducer function
-export const {setConversations,addConversation,setSelectedConversation,setConvTitle} = conversationSlice.actions
+export const {setConversations,addConversation,setSelectedConversation,setConvTitle,removeConversation} = conversationSlice.actions
 
 export default conversationSlice.reducer

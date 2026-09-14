@@ -3,11 +3,30 @@ import { Send, Paperclip,  Square, Zap, MessageSquare, Code2, Presentation, Imag
 import { useDispatch, useSelector } from "react-redux";
 import { addMessage, setArtifacts, setIsLoading } from "../redux/message.slice";
 import { sendPrompt } from "../features/agent.api";
-import { Mic, MicOff } from "lucide-react";
+import api from "../utils/axios";
+import { Mic, MicOff, Loader2 } from "lucide-react";
 import { useEffect } from "react";
 import { createConversation, updateConversations } from "../features/conversation.api";
 import { addConversation, setConvTitle, setSelectedConversation } from "../redux/conversation.slice";
 import { useRef } from "react";
+
+// Mirrors what the agent's multer filter and utils/extractText.js accept.
+const ACCEPTED_EXTENSIONS =
+  /\.(pdf|docx|txt|md|markdown|csv|tsv|json|log|ya?ml|xml|html?)$/i;
+
+const isAcceptedFile = (file) =>
+  Boolean(file) &&
+  (file.type.startsWith("image/") ||
+    file.type.startsWith("text/") ||
+    ACCEPTED_EXTENSIONS.test(file.name || ""));
+
+// Sending a file with no typed question is a complete request on its own, so
+// give the agent a sensible instruction rather than an empty prompt.
+const defaultPromptFor = (file) => {
+  if (!file) return "";
+  if (file.type.startsWith("image/")) return "Describe this image.";
+  return "Summarise this document.";
+};
 
 export default function ChatInput({
   setBanner
@@ -16,7 +35,7 @@ export default function ChatInput({
   const [value, setValue] = useState("");
 const [isListening, setIsListening] = useState(false);
 
-const recognitionRef = useRef(null);
+const [isTranscribing, setIsTranscribing] = useState(false);
   const dispatch = useDispatch();
   const { selectedConversation } = useSelector(state => state.conversation);
    const { isLoading } = useSelector(state => state.message);
@@ -29,6 +48,34 @@ selectedFile,
 setSelectedFile
 
 ]=useState(null);
+
+const [isDragging, setIsDragging] = useState(false);
+
+// dragenter/dragleave fire for every child element the cursor crosses, so a
+// depth counter is what keeps the overlay from flickering mid-drag.
+const dragDepth = useRef(0);
+
+const acceptFile = (file) => {
+  if (!file) return;
+
+  if (!isAcceptedFile(file)) {
+    setBanner({
+      open: true,
+      title: "Unsupported file",
+      message: `${file.name} isn't supported. Attach an image, PDF, Word document or text file.`
+    });
+    return;
+  }
+
+  setSelectedFile(file);
+};
+
+const handleDrop = (e) => {
+  e.preventDefault();
+  dragDepth.current = 0;
+  setIsDragging(false);
+  acceptFile(e.dataTransfer.files?.[0]);
+};
 
    const placeholders={
 
@@ -94,84 +141,153 @@ search:"Search the web..."
 
 ];
 
-useEffect(() => {
+// ── Voice input ───────────────────────────────────────────────────────────
+// Recorded in the browser with MediaRecorder, transcribed server-side by
+// Sarvam (see backend modules/speech). The Sarvam key is deliberately not
+// reachable from here — a VITE_* var would be inlined into the bundle.
+const mediaRecorderRef = useRef(null);
+const audioChunksRef = useRef([]);
+const micStreamRef = useRef(null);
 
-  const SpeechRecognition =
-    window.SpeechRecognition ||
-    window.webkitSpeechRecognition;
+const releaseMic = () => {
+  micStreamRef.current?.getTracks().forEach((track) => track.stop());
+  micStreamRef.current = null;
+};
 
-  if (!SpeechRecognition) return;
+// Without this the tab keeps showing "recording" if the user navigates away
+// mid-capture.
+useEffect(() => releaseMic, []);
 
-  const recognition = new SpeechRecognition();
+const transcribeAudio = async (blob) => {
+  if (!blob || blob.size < 2000) return;
 
-  recognition.lang = "en-IN";
+  setIsTranscribing(true);
+  try {
+    const { data } = await api.post("/api/speech/transcribe", blob, {
+      headers: { "Content-Type": blob.type || "audio/webm" },
+    });
 
-  recognition.interimResults = true;
-
-  recognition.continuous = true;
-
-  recognition.onresult = (event) => {
-
-    let transcript = "";
-
-    for (
-
-      let i = event.resultIndex;
-
-      i < event.results.length;
-
-      i++
-
-    ) {
-
-      transcript += event.results[i][0].transcript;
-
+    const text = (data?.transcript || "").trim();
+    if (!text) {
+      setBanner({
+        open: true,
+        title: "Nothing heard",
+        message: "No speech was picked up. Try again a little closer to the mic.",
+      });
+      return;
     }
 
-    setValue(transcript);
+    // Append instead of replace — anything already typed has to survive.
+    setValue((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
+  } catch (error) {
+    console.error("Transcription failed:", error);
+    setBanner({
+      open: true,
+      title: "Could not transcribe",
+      message:
+        error.response?.data?.message ||
+        "The speech service did not respond. Please try again.",
+    });
+  } finally {
+    setIsTranscribing(false);
+  }
+};
 
-  };
+const startRecording = async () => {
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+    setBanner({
+      open: true,
+      title: "Mic unavailable",
+      message: "This browser does not support audio recording.",
+    });
+    return;
+  }
 
-  recognition.onend = () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    micStreamRef.current = stream;
+    audioChunksRef.current = [];
 
+    // Safari has no webm/opus and falls back to mp4; both are accepted upstream.
+    const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find(
+      (type) => MediaRecorder.isTypeSupported?.(type)
+    );
+
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) audioChunksRef.current.push(event.data);
+    };
+
+    recorder.onerror = () => {
+      releaseMic();
+      setIsListening(false);
+      setBanner({
+        open: true,
+        title: "Recording failed",
+        message: "The microphone stopped unexpectedly. Please try again.",
+      });
+    };
+
+    recorder.onstop = () => {
+      releaseMic();
+      setIsListening(false);
+      const blob = new Blob(audioChunksRef.current, {
+        type: recorder.mimeType || "audio/webm",
+      });
+      audioChunksRef.current = [];
+      transcribeAudio(blob);
+    };
+
+    recorder.start();
+    mediaRecorderRef.current = recorder;
+    setIsListening(true);
+  } catch (error) {
+    // The old implementation had no error path at all, so a denied permission
+    // left the button stuck in its listening state forever.
+    console.error("Mic error:", error);
+    releaseMic();
     setIsListening(false);
-
-  };
-
-  recognitionRef.current = recognition;
-
-}, []);
+    setBanner({
+      open: true,
+      title: "Microphone blocked",
+      message:
+        error?.name === "NotAllowedError"
+          ? "Microphone permission was denied. Allow it in your browser's site settings."
+          : error?.name === "NotFoundError"
+          ? "No microphone was found on this device."
+          : "Could not start the microphone.",
+    });
+  }
+};
 
 const toggleMic = () => {
-
-  if (!recognitionRef.current) {
-
-    alert("Speech Recognition not supported");
-
-    return;
-
-  }
+  if (isTranscribing) return;
 
   if (isListening) {
-
-    recognitionRef.current.stop();
-
-    setIsListening(false);
-
+    try {
+      mediaRecorderRef.current?.stop();
+    } catch {
+      releaseMic();
+      setIsListening(false);
+    }
   } else {
-
-    recognitionRef.current.start();
-
-    setIsListening(true);
-
+    startRecording();
   }
-
 };
 
 
   const handleSend = async () => {
-    const prompt = value.trim();
+    // A file on its own is a complete request -- requiring typed text meant an
+    // attached PDF could never be sent.
+    const typed = value.trim();
+    const prompt = typed || defaultPromptFor(selectedFile);
+
     if (!prompt) return;
+
+    // Title the conversation after the file when nothing was typed, so the
+    // sidebar doesn't fill with identical "Summarise this document" entries.
+    const title = (typed || selectedFile?.name || prompt).slice(0, 40);
 
     dispatch(setIsLoading(true));
 
@@ -188,8 +304,8 @@ const toggleMic = () => {
       }
 
       if (conversation.title === "New Chat") {
-        await updateConversations(conversation._id, prompt.slice(0, 40));
-        dispatch(setConvTitle({ conversationId: conversation._id, title: prompt.slice(0, 40) }));
+        await updateConversations(conversation._id, title);
+        dispatch(setConvTitle({ conversationId: conversation._id, title }));
       }
 
       dispatch(addMessage({ role: "user", content: prompt }));
@@ -212,6 +328,13 @@ formData.append(
     selectedAgent
 );
 
+// The server has no idea where the user is. Sending the browser's zone is what
+// lets "what is the current time" be answered instead of refused.
+formData.append(
+    "timezone",
+    Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+);
+
 if(selectedFile){
 
     formData.append(
@@ -221,7 +344,11 @@ if(selectedFile){
 
 }
 
-setSelectedFile(null)
+setSelectedFile(null);
+
+// Without this the input keeps the old value and re-picking the same file
+// never fires onChange.
+if (fileRef.current) fileRef.current.value = "";
 
       const data = await sendPrompt(formData);
     console.log(data)
@@ -265,8 +392,38 @@ catch(error){
   };
 
   return (
-   <div className="w-full overflow-hidden px-3 md:px-5 py-4 border-t border-white/[0.06] bg-[#0d0f14]">
-      <div className="flex flex-col gap-2 bg-white/[0.03] border border-white/[0.07] rounded-2xl px-4 pt-3.5 pb-3">
+   <div
+      className="w-full overflow-hidden px-3 md:px-5 py-4 border-t border-white/[0.06] bg-[#0d0f14]"
+      onDragEnter={(e) => {
+        e.preventDefault();
+        if (!e.dataTransfer?.types?.includes("Files")) return;
+        dragDepth.current += 1;
+        setIsDragging(true);
+      }}
+      onDragOver={(e) => e.preventDefault()}
+      onDragLeave={(e) => {
+        e.preventDefault();
+        dragDepth.current = Math.max(0, dragDepth.current - 1);
+        if (dragDepth.current === 0) setIsDragging(false);
+      }}
+      onDrop={handleDrop}
+    >
+      <div
+        className={`relative flex flex-col gap-2 border rounded-2xl px-4 pt-3.5 pb-3 transition-colors duration-150
+          ${isDragging
+            ? "bg-indigo-500/[0.07] border-indigo-500/60"
+            : "bg-white/[0.03] border-white/[0.07]"}`}
+      >
+
+        {isDragging && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-[#0d0f14]/85 backdrop-blur-sm pointer-events-none">
+            <div className="flex items-center gap-2 text-[13px] font-medium text-indigo-300">
+              <Paperclip size={14} />
+              Drop to attach — images, PDF, Word or text
+            </div>
+          </div>
+        )}
+
 
 
     <div className="flex w-[80%] gap-2 pr-2 flex-wrap">
@@ -333,35 +490,31 @@ selectedFile && (
 
 {
 
-selectedFile.type==="application/pdf"
+(selectedFile.type || "").startsWith("image/")
 
 ?
-
-<FileText
-
-size={16}
-
-className="text-red-400"
-
-/>
-
-:
-
-
-
-selectedFile?.type.startsWith("image/")
-
-&&
 
 <img
 
 src={URL.createObjectURL(selectedFile)}
 
-className="h-10 w-10 rounded-xl object-cover mt-3"
+className="h-10 w-10 rounded-xl object-cover"
 
 />
 
+:
 
+<FileText
+
+size={16}
+
+className={
+selectedFile.type==="application/pdf"
+? "text-red-400"
+: "text-indigo-400"
+}
+
+/>
 
 }
 
@@ -454,18 +607,11 @@ type="file"
 
 hidden
 
-accept=".pdf,image/*"
+accept="image/*,.pdf,.docx,.txt,.md,.markdown,.csv,.tsv,.json,.log,.yml,.yaml,.xml,.html,.htm"
 
 onChange={(e)=>{
 
-const file =
-e.target.files[0];
-
-if(file){
-
-setSelectedFile(file);
-
-}
+acceptFile(e.target.files[0]);
 
 }}
 
@@ -480,6 +626,16 @@ fileRef.current.click()
            <button
 
 onClick={toggleMic}
+
+disabled={isTranscribing}
+
+title={
+  isTranscribing
+    ? "Transcribing…"
+    : isListening
+    ? "Stop and transcribe"
+    : "Record voice"
+}
 
 className={`
 
@@ -499,6 +655,8 @@ transition-all
 
 cursor-pointer
 
+disabled:cursor-not-allowed
+
 ${
 
 isListening
@@ -506,6 +664,14 @@ isListening
 ?
 
 "bg-red-500 text-white"
+
+:
+
+isTranscribing
+
+?
+
+"text-indigo-400"
 
 :
 
@@ -518,6 +684,14 @@ isListening
 >
 
 {
+
+isTranscribing
+
+?
+
+<Loader2 size={14} className="animate-spin"/>
+
+:
 
 isListening
 
@@ -537,11 +711,11 @@ isListening
           {/* Right — send / stop */}
           <button
             onClick={handleSend}
-            disabled={!isLoading && !value.trim()}
+            disabled={!isLoading && !value.trim() && !selectedFile}
             className={`flex items-center justify-center w-8 h-8 rounded-lg border-none cursor-pointer transition-all duration-150
               ${isLoading
                 ? "bg-white text-[#0d0f14] hover:bg-slate-200"
-                : value.trim()
+                : value.trim() || selectedFile
                 ? "bg-gradient-to-br from-indigo-500 to-violet-700 hover:opacity-90 text-white"
                 : "bg-white/[0.05] text-slate-600 cursor-not-allowed"
               }`}

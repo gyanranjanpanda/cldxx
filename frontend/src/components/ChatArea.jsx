@@ -1,9 +1,9 @@
 import { useState } from "react";
 import AIBanner from "./AiBanner";
 import ChatInput from "./ChatInput";
-import MessageBubble from "./MessageBubble";
 import MessageList from "./MessageList";
 import Navbar from "./Navbar";
+import Particles from "./Particles";
 
 
 function ChatArea() {
@@ -13,11 +13,29 @@ function ChatArea() {
     message:""
 });
   return (
-    <div className="flex-1 flex flex-col min-w-0">
+    <div className="relative flex-1 flex flex-col min-w-0 overflow-hidden">
 
-      <Navbar />
+      <div className="pointer-events-none absolute inset-0 z-0 opacity-55">
+        <Particles
+          particleColors={["#818cf8", "#a78bfa", "#67e8f9"]}
+          particleCount={180}
+          particleSpread={11}
+          speed={0.08}
+          particleBaseSize={72}
+          sizeRandomness={1.2}
+          alphaParticles
+          moveParticlesOnHover
+          particleHoverFactor={0.65}
+        />
+      </div>
 
-      <MessageList />
+      <div className="relative z-10">
+        <Navbar />
+      </div>
+
+      <div className="relative z-10 flex-1 min-h-0 flex flex-col">
+        <MessageList />
+      </div>
       <AIBanner
 
    open={banner.open}
@@ -37,9 +55,9 @@ function ChatArea() {
 
 />
 
-     <ChatInput
-  setBanner={setBanner}
-/>
+      <div className="relative z-10">
+        <ChatInput setBanner={setBanner} />
+      </div>
 
     </div>
   );

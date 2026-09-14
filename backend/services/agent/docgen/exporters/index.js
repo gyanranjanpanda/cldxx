@@ -6,12 +6,17 @@
  */
 
 import { exportPdf }      from "./pdf.js";
+import { exportPptx }     from "./pptx.js";
 import { exportMarkdown }  from "./markdown.js";
 
 const exporters = {
-  pdf:      async ({ html, jobId }) => exportPdf(html, jobId),
-  markdown: ({ document, jobId })   => exportMarkdown(document, jobId),
+  pdf:      async ({ html, jobId })       => exportPdf(html, jobId),
+  pptx:     async ({ document, jobId })   => exportPptx({ document, jobId }),
+  markdown: ({ document, jobId })         => exportMarkdown(document, jobId),
 };
+
+/** Formats that render from the document tree and need no HTML pass. */
+export const HTML_FREE_FORMATS = new Set(["pptx", "markdown"]);
 
 /**
  * @param {{ type: string, document?: object, html?: string, jobId?: string }} opts
