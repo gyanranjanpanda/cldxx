@@ -45,9 +45,9 @@ export const buildVocabulary = (servers = []) => {
       if (!TOO_GENERIC.has(word)) words.add(word);
     });
 
-    (server.tools || []).forEach((toolName) => {
+    (server.tools || []).forEach((tool) => {
 
-      const name = String(toolName).toLowerCase();
+      const name = String(tool?.name ?? tool).toLowerCase();
 
       phrases.add(name);
       // "execute manim code" reads the same to a person as the snake_case form.
@@ -77,6 +77,39 @@ const loadVocabulary = async (userId) => {
 };
 
 export const forgetVocabulary = (userId) => redis.del(cacheKey(userId));
+
+/**
+ * What the user's tools can do, in one short block. The router shows this to
+ * the classifier so a request that a tool can serve lands on the chat agent --
+ * the only place tools are bound -- even when the user never names the server.
+ */
+export const describeTools = async (userId) => {
+
+  if (!userId) return "";
+
+  try {
+
+    const { servers } = await fetchServers(userId);
+
+    const lines = servers.flatMap((server) =>
+      (server.tools || []).map((tool) => {
+        const name = tool?.name ?? tool;
+        const what = tool?.description || "";
+        return `- ${name}${what ? `: ${what}` : ""}`;
+      })
+    );
+
+    return lines.join("\n");
+
+  } catch (error) {
+
+    console.error("[mcp] tool description lookup failed:", error.message);
+
+    return "";
+
+  }
+
+};
 
 const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 

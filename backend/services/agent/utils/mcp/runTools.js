@@ -1,4 +1,4 @@
-import { AIMessage, ToolMessage } from "@langchain/core/messages";
+import { AIMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
 import { McpSession, fetchServers } from "./registry.js";
 
 // Each round trip is a full model call, so this caps cost and stops a server
@@ -8,6 +8,29 @@ const MAX_ROUNDS = Number(process.env.MCP_MAX_TOOL_ROUNDS) || 5;
 // Big tool outputs (a file listing, a scrape) blow the context window and push
 // the real conversation out of it.
 const MAX_RESULT_CHARS = Number(process.env.MCP_MAX_RESULT_CHARS) || 8000;
+
+// Binding tools is not the same as using them. The chat prompt tells the model
+// to answer in Markdown and never to mention internal tools, which read as
+// "write something" -- so asked to render an animation it wrote a Manim script
+// instead of calling the Manim tool sitting right there. This says the tools
+// are the user's own, and that running one beats describing it.
+const toolPolicy = (specs) => new SystemMessage(`
+You have these tools, connected by the user themselves:
+
+${specs.map((spec) => `- ${spec.function.name}: ${spec.function.description}`).join("\n")}
+
+How to use them:
+
+- If a tool can carry out the request, CALL IT. Do not write code, instructions
+  or a description of what the tool would do instead -- actually run it.
+- Asking a tool to do something and showing the user source code are different
+  answers. They asked for the thing done.
+- These are the user's own tools, not internal machinery: you may name the tool
+  you used and report exactly what it returned.
+- Report the real result. If a tool fails, say so and say why -- never invent an
+  output, a file path or a URL the tool did not give you.
+- If no tool fits, answer normally without mentioning them.
+`);
 
 const truncate = (text) =>
   text.length > MAX_RESULT_CHARS
@@ -46,8 +69,13 @@ export const runWithMcpTools = async ({ llm, messages, userId }) => {
     }
 
     const llmWithTools = llm.bindTools(specs);
-    const thread       = [...messages];
-    const executed     = [];
+
+    // Placed after the agent's own system prompt so it reads as an addition to
+    // it, not a competing first instruction.
+    const thread = [messages[0], toolPolicy(specs), ...messages.slice(1)]
+      .filter(Boolean);
+
+    const executed = [];
 
     for (let round = 0; round < MAX_ROUNDS; round++) {
 

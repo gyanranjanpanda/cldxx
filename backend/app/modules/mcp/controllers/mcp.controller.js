@@ -366,8 +366,12 @@ export const getServersForAgent = async (req, res) => {
         env:       decryptPairs(doc.env),
         enabled:   doc.enabled,
         // Cached from the last health check. The router matches the prompt
-        // against these names, so it must not have to connect to find them.
-        tools:     (doc.tools || []).map((tool) => tool.name)
+        // against these, and describes them to the classifier, so neither has
+        // to open a connection to find out what a server can do.
+        tools:     (doc.tools || []).map((tool) => ({
+          name:        tool.name,
+          description: tool.description || ""
+        }))
       }))
     });
 

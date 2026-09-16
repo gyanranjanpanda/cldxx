@@ -2,7 +2,7 @@ import { getModel } from "../utils/model.js";
 import { parseRepoUrl } from "../utils/github.js";
 import { isClockQuestion } from "../utils/now.js";
 import redis from "../../../shared/redis/redis.js";
-import { wantsMcpTools } from "../utils/mcp/intent.js";
+import { describeTools, wantsMcpTools } from "../utils/mcp/intent.js";
 
 export const routerNode =
 async(state)=>{
@@ -116,6 +116,28 @@ if(state.file){
  const llm =
  getModel("router");
 
+// Naming the server is not the only way to ask for it. "render an animation of
+// a bouncing ball" should reach the tool that renders animations, so the
+// classifier is shown what the user's tools actually do and told that anything
+// they can serve belongs on chat -- where tools are bound.
+const toolCatalogue =
+await describeTools(state.userId);
+
+const toolRule =
+toolCatalogue
+ ? `
+
+The user has connected these external tools, which are available ONLY to the
+chat agent:
+
+${toolCatalogue}
+
+If the request is something one of these tools can do, answer "chat" -- even
+when it sounds like a coding or image task. Writing code that does the job is
+the wrong answer when a tool can do the job.
+`
+ : "";
+
  const result =
  await llm.invoke(`
 
@@ -169,6 +191,8 @@ or artwork.
 Pick "image" whenever the user
 wants a picture produced, not
 code that draws one.
+
+${toolRule}
 
 Return ONLY one word, exactly
 one of:
