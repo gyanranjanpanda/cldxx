@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Plus, MessageSquare, LogOut, User, PenSquare, Menu, X,
-  CoinsIcon, Trash2, Check, Loader2, Search, ChevronDown, Sparkles, Ghost, Plug
+  CoinsIcon, Trash2, Check, Loader2, Search, ChevronDown, Sparkles, Ghost, Plug, Share2
 } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import api from "../utils/axios";
@@ -13,6 +13,7 @@ import { setArtifacts, setMessages } from "../redux/message.slice";
 import { AGENTS } from "../constants/agents";
 import BillingDrawer from "./BillingDrawer";
 import McpDrawer from "./McpDrawer";
+import ShareDialog from "./ShareDialog";
 import { getMcpServers } from "../features/mcp.api";
 
 const DAY = 86_400_000;
@@ -66,6 +67,9 @@ export default function Sidebar() {
   const [showMcp, setShowMcp]           = useState(false);
   // Only the count is kept here; the drawer owns the full list.
   const [mcpEnabled, setMcpEnabled]     = useState(0);
+  // Which conversation the share dialog is open for. Kept here rather than in
+  // the row so the dialog is not remounted as the list re-renders.
+  const [sharing, setSharing]           = useState(null);
   const [searchOpen, setSearchOpen]     = useState(false);
   const [query, setQuery]               = useState("");
   const [agentsOpen, setAgentsOpen]     = useState(false);
@@ -478,7 +482,21 @@ export default function Sidebar() {
                           {chat.title}
                         </p>
 
-                        {deletingId === chat._id ? (
+                        {/* Sharing is per conversation, so the action lives on the row.
+                  Requiring the chat to be open first is what made the feature
+                  hard to find at all. */}
+              {confirmingId !== chat._id && deletingId !== chat._id && (
+                <button
+                  title="Share this chat"
+                  onClick={(e) => { e.stopPropagation(); setSharing(chat); }}
+                  className={`flex shrink-0 items-center justify-center w-6 h-6 rounded-md border-none bg-transparent text-slate-600 cursor-pointer hover:bg-white/[0.08] hover:text-indigo-300 transition-all duration-150
+                    ${isHov || isActive ? "opacity-100" : "opacity-0"}`}
+                >
+                  <Share2 size={12} />
+                </button>
+              )}
+
+              {deletingId === chat._id ? (
                           <Loader2 size={13} className="shrink-0 animate-spin text-slate-500" />
                         ) : confirmingId === chat._id ? (
                           <span className="flex shrink-0 items-center gap-0.5">
@@ -561,6 +579,12 @@ export default function Sidebar() {
       <McpDrawer
         open={showMcp}
         onClose={() => { setShowMcp(false); refreshMcpCount(); }}
+      />
+
+      <ShareDialog
+        open={Boolean(sharing)}
+        conversation={sharing}
+        onClose={() => setSharing(null)}
       />
     </>
   );
