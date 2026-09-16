@@ -143,8 +143,11 @@ export class McpSession {
             type: "function",
             function: {
               name,
-              description:
-                `[${server.name}] ${tool.description || tool.name}`.slice(0, 1024),
+              // Every schema is resent on every round trip, so descriptions are
+            // kept short: 14 filesystem tools at a full kilobyte each were
+            // enough on their own to blow a provider's per-minute token limit.
+            description:
+                `[${server.name}] ${tool.description || tool.name}`.slice(0, 220),
               parameters: normaliseSchema(tool.inputSchema)
             }
           });

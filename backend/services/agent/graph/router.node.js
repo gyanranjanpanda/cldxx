@@ -126,15 +126,21 @@ await describeTools(state.userId);
 const toolRule =
 toolCatalogue
  ? `
-
-The user has connected these external tools, which are available ONLY to the
-chat agent:
+CHECK THIS FIRST -- the user has connected these external tools, which only the
+"chat" agent can reach:
 
 ${toolCatalogue}
 
-If the request is something one of these tools can do, answer "chat" -- even
-when it sounds like a coding or image task. Writing code that does the job is
-the wrong answer when a tool can do the job.
+If any of these tools could carry out the request, answer "chat" and stop
+reading. This outranks every category below: the tools do the job for real,
+while the other agents can only produce something that looks like it.
+
+Examples of what that means:
+- A tool that renders animations beats "image", which returns a still picture.
+- A tool that runs code beats "coding", which only writes code for the user.
+- A tool that reads files beats "chat" answering from memory.
+
+Only fall through to the categories below when no tool fits.
 `
  : "";
 
@@ -142,7 +148,7 @@ the wrong answer when a tool can do the job.
  await llm.invoke(`
 
 You are an agent router.
-
+${toolRule}
 Available agents:
 
 - chat
@@ -191,8 +197,6 @@ or artwork.
 Pick "image" whenever the user
 wants a picture produced, not
 code that draws one.
-
-${toolRule}
 
 Return ONLY one word, exactly
 one of:

@@ -17,7 +17,7 @@ const MAX_RESULT_CHARS = Number(process.env.MCP_MAX_RESULT_CHARS) || 8000;
 const toolPolicy = (specs) => new SystemMessage(`
 You have these tools, connected by the user themselves:
 
-${specs.map((spec) => `- ${spec.function.name}: ${spec.function.description}`).join("\n")}
+${specs.map((spec) => `- ${spec.function.name}`).join("\n")}
 
 How to use them:
 
@@ -36,6 +36,89 @@ const truncate = (text) =>
   text.length > MAX_RESULT_CHARS
     ? `${text.slice(0, MAX_RESULT_CHARS)}\n\n[truncated — ${text.length - MAX_RESULT_CHARS} more characters]`
     : text;
+
+// Rate limits, outages and auth rejections come from the model provider, not
+// from any MCP server, and retrying the same call without tools will usually
+// fail the same way -- or worse, succeed with an answer that contradicts the
+// tools the user has connected.
+const isProviderFailure = (error) => {
+
+  const status = error?.status ?? error?.response?.status;
+
+  if (status === 429 || (status >= 500 && status < 600)) return true;
+
+  return /rate.?limit|quota|overloaded|timeout|unauthorized|api key/i
+    .test(error?.message || "");
+
+};
+
+// Providers say how long to wait ("Please try again in 20.175s"), and a free
+// tier plus a dozen tool schemas reaches that limit easily. Waiting once is a
+// far better answer than handing the user a raw 429.
+const MAX_RETRY_WAIT_MS = Number(process.env.MCP_MAX_RETRY_WAIT_MS) || 25_000;
+
+const retryDelayMs = (error) => {
+
+  const header = error?.response?.headers?.["retry-after"];
+
+  if (header && !Number.isNaN(Number(header))) {
+    return Math.ceil(Number(header) * 1000);
+  }
+
+  const stated = String(error?.message || "").match(/try again in ([\d.]+)\s*s/i);
+
+  return stated ? Math.ceil(Number(stated[1]) * 1000) + 500 : 0;
+
+};
+
+const rateLimited = (error) =>
+  (error?.status ?? error?.response?.status) === 429 ||
+  /rate.?limit/i.test(error?.message || "");
+
+const friendlyProviderError = (error) => {
+
+  const seconds = Math.ceil(retryDelayMs(error) / 1000);
+
+  const wrapped = new Error(
+    rateLimited(error)
+      ? `The model is rate limited right now${seconds ? `. Try again in about ${seconds}s` : ""}.`
+      : "The model provider is unavailable right now. Please try again."
+  );
+
+  wrapped.status = error?.status ?? error?.response?.status ?? 503;
+
+  wrapped.data = {
+    success: false,
+    title: rateLimited(error) ? "Rate limited" : "Model unavailable",
+    message: wrapped.message
+  };
+
+  return wrapped;
+
+};
+
+// One retry, and only for a limit the provider says will clear on its own.
+const invokeWithRetry = async (model, thread) => {
+
+  try {
+
+    return await model.invoke(thread);
+
+  } catch (error) {
+
+    const wait = rateLimited(error) ? retryDelayMs(error) : 0;
+
+    if (!wait || wait > MAX_RETRY_WAIT_MS) throw error;
+
+    console.warn(`[mcp] rate limited, retrying in ${Math.round(wait / 1000)}s`);
+
+    await new Promise((resolve) => setTimeout(resolve, wait));
+
+    return model.invoke(thread);
+
+  }
+
+};
 
 /**
  * Runs the model with the user's MCP tools bound, executing whatever it asks
@@ -79,7 +162,7 @@ export const runWithMcpTools = async ({ llm, messages, userId }) => {
 
     for (let round = 0; round < MAX_ROUNDS; round++) {
 
-      const reply = await llmWithTools.invoke(thread);
+      const reply = await invokeWithRetry(llmWithTools, thread);
       const calls = reply.tool_calls || [];
 
       if (!calls.length) {
@@ -117,7 +200,7 @@ export const runWithMcpTools = async ({ llm, messages, userId }) => {
       "I have gathered enough from the tools. Answering now from what I have."
     ));
 
-    const final = await llmWithTools.invoke(thread);
+    const final = await invokeWithRetry(llmWithTools, thread);
 
     return {
       response: final.content,
@@ -127,8 +210,12 @@ export const runWithMcpTools = async ({ llm, messages, userId }) => {
 
   } catch (error) {
 
-    // MCP is an enhancement. If the whole layer fails, the user still gets a
-    // normal answer rather than an error page.
+    // A provider failure is not an MCP failure. Answering anyway produces a
+    // confident "I cannot see your files" from a model that had a file tool
+    // bound a moment ago -- worse than an error, because the user believes it.
+    if (isProviderFailure(error)) throw friendlyProviderError(error);
+
+    // MCP itself is an enhancement, so anything else still gets an answer.
     console.error("[mcp] tool loop failed:", error.message);
 
     const reply = await llm.invoke(messages);
