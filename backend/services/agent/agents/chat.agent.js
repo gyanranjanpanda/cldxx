@@ -4,6 +4,7 @@ import { getModel } from "../utils/model.js";
 import { checkAgentLimit } from "../config/agentRateLimit.js";
 import { deductCredits } from "../utils/deductCredits.js";
 import { describeNow } from "../utils/now.js";
+import { newFence, untrustedContentRules, wrapUntrusted } from "../utils/guardrails.js";
 import { runWithMcpTools } from "../utils/mcp/runTools.js";
 
 
@@ -46,6 +47,10 @@ const providerAnswer = state.searchResults?.answer || "";
 // one crawled in July.
 const now = describeNow(state.timezone);
 
+// Search results are pages written by strangers. A page that says "ignore your
+// instructions" has to read as a page that says that, not as an instruction.
+const fence = newFence();
+
 const clockContext = `
 Current date and time: ${now.formatted} (the user's timezone is ${now.zone}).
 The same moment in UTC: ${now.utc}.
@@ -64,13 +69,13 @@ instant this message was sent.
 const searchContext = hits.length
   ? `
 Web Search Results (fetched ${state.searchResults.searchedAt}):
-${providerAnswer ? `\nLive summary from the search provider:\n${providerAnswer}\n` : ""}
+${providerAnswer ? `\nLive summary from the search provider:\n${wrapUntrusted(providerAnswer, { source: "search provider summary", fence })}\n` : ""}
 ${hits
   .map(
     (r, i) =>
       `[${i + 1}] ${r.title}\n${r.url}${
         r.publishedDate ? `\nPublished: ${r.publishedDate}` : ""
-      }\n${r.content}`
+      }\n${wrapUntrusted(r.content, { source: `web result ${i + 1}: ${r.url}`, fence })}`
   )
   .join("\n\n")}
 
@@ -118,6 +123,8 @@ ${clockContext}
 ${searchContext}
 
 
+
+${untrustedContentRules(fence)}
 
 Rules:
 

@@ -6,6 +6,16 @@ import { getDownloadUrl } from "../utils/getDownloadUrl.js";
 import { checkAgentLimit } from "../config/agentRateLimit.js";
 import { deductCredits } from "../utils/deductCredits.js";
 
+// No guardrails here, deliberately. Every other agent fences the outside text
+// it reads -- web pages, documents, repositories, tool output -- because that
+// text can carry instructions. This agent reads none of it: it takes the
+// user's own words and returns a picture, consults no external source and
+// calls no tools, so there is no untrusted channel to defend. Adding an
+// injection-rules block would only compete with the prompt the user is trying
+// to write. Keep it out unless this agent starts reading something it did not
+// get from the user.
+
+
 export const imageAgent = async (state) => {
 
   try {

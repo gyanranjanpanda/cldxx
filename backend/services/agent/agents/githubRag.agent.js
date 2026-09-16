@@ -1,6 +1,7 @@
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { QdrantVectorStore } from "@langchain/qdrant";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { newFence, untrustedContentRules, wrapUntrusted } from "../utils/guardrails.js";
 
 import redis from "../../../shared/redis/redis.js";
 import { getModel } from "../utils/model.js";
@@ -189,10 +190,14 @@ export const githubRagAgent = async (state) => {
     // only when this request downloaded the repo anyway.
     const structureContext =
       wantsStructure && fileInfo
-        ? `\nRepository file tree:\n${treeSummary(fileInfo.allPaths)}\n\nREADME:\n${readmeExcerpt(fileInfo.files)}\n`
+        ? `\nRepository file tree:\n${treeSummary(fileInfo.allPaths)}\n\nREADME:\n${wrapUntrusted(readmeExcerpt(fileInfo.files), { source: `README of ${meta.owner}/${meta.repo}`, fence })}\n`
         : "";
 
     const llm = getModel("chat");
+
+    // Anyone can put anything in a README. This content is interpolated into
+    // the system message, so unfenced it would carry system authority.
+    const fence = newFence();
 
     const response = await llm.invoke([
       new SystemMessage(
@@ -209,10 +214,12 @@ Rules:
 - The excerpts are retrieved fragments, not the whole repository. Never claim
   something does not exist anywhere -- only that you did not see it.
 - Keep the answer as short as the question deserves.
+
+${untrustedContentRules(fence)}
 ${structureContext}
 Relevant code:
 
-${codeContext}
+${wrapUntrusted(codeContext, { source: `code from ${meta.owner}/${meta.repo}`, fence })}
 `.trim()
       ),
       new HumanMessage(state.prompt)

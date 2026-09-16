@@ -3,6 +3,7 @@ import { extractText } from "../utils/extractText.js";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { createVectorStore } from "../utils/vectorStore.js";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { newFence, untrustedContentRules, wrapUntrusted } from "../utils/guardrails.js";
 import { getModel } from "../utils/model.js";
 import { QdrantVectorStore } from "@langchain/qdrant";
 
@@ -59,6 +60,10 @@ export const pdfRagAgent = async (state) => {
 
     const llm = getModel("pdf_rag");
 
+    // An uploaded file is attacker-controlled whenever the user did not write
+    // it themselves -- a forwarded PDF, a downloaded report, a CSV export.
+    const fence = newFence();
+
     const messages = [
       new SystemMessage(`
 You are cldxAI Document Assistant.
@@ -81,12 +86,17 @@ Rules:
 "I couldn't find this information in the uploaded document."
 
 - Use Markdown formatting.
+
+${untrustedContentRules(fence)}
 `),
 
       new HumanMessage(`
 Document:
 
-${context}
+${wrapUntrusted(context, {
+  source: `uploaded file: ${state.file.originalname || "document"}`,
+  fence
+})}
 
 Question:
 
