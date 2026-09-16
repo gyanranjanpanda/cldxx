@@ -19,6 +19,7 @@ import chatRouter from "./modules/chat/routes/chat.routes.js";
 import billingRouter from "./modules/billing/routes/billing.routes.js";
 import internalRouter from "./routes/internal.routes.js";
 import speechRouter from "./modules/speech/routes/speech.routes.js";
+import mcpRouter from "./modules/mcp/routes/mcp.routes.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, ".env") });
@@ -49,6 +50,7 @@ app.use("/api/auth", json, authRouter);
 app.use("/api/me", protect, getCurrentUser);
 app.use("/api/chat", protect, injectUser, json, chatRouter);
 app.use("/api/billing", protect, injectUser, json, billingRouter);
+app.use("/api/mcp", protect, injectUser, json, mcpRouter);
 
 // No `json` here: the body is a raw audio blob, parsed inside the route.
 app.use("/api/speech", protect, speechRouter);

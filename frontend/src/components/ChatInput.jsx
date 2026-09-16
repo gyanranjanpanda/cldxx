@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Send, Paperclip,  Square, Zap, MessageSquare, Code2, Presentation, Image as ImageIcon, Globe, FileText,X } from "lucide-react";
+import { Send, Paperclip, Square, FileText, X } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { addMessage, setArtifacts, setIsLoading } from "../redux/message.slice";
 import { sendPrompt } from "../features/agent.api";
@@ -7,7 +7,8 @@ import api from "../utils/axios";
 import { Mic, MicOff, Loader2 } from "lucide-react";
 import { useEffect } from "react";
 import { createConversation, updateConversations } from "../features/conversation.api";
-import { addConversation, setConvTitle, setSelectedConversation } from "../redux/conversation.slice";
+import { addConversation, setConvTitle, setSelectedAgent, setSelectedConversation } from "../redux/conversation.slice";
+import { AGENTS } from "../constants/agents";
 import { useRef } from "react";
 
 // Mirrors what the agent's multer filter and utils/extractText.js accept.
@@ -31,13 +32,12 @@ const defaultPromptFor = (file) => {
 export default function ChatInput({
   setBanner
 }) {
-  const [selectedAgent, setSelectedAgent] =useState("auto");
   const [value, setValue] = useState("");
 const [isListening, setIsListening] = useState(false);
 
 const [isTranscribing, setIsTranscribing] = useState(false);
   const dispatch = useDispatch();
-  const { selectedConversation } = useSelector(state => state.conversation);
+  const { selectedConversation, selectedAgent, incognito, incognitoId } = useSelector(state => state.conversation);
    const { isLoading } = useSelector(state => state.message);
 const fileRef = useRef(null);
 
@@ -95,51 +95,7 @@ search:"Search the web..."
 
 };
 
-   const agents = [
-
-  {
-    id:"auto",
-    icon:Zap,
-    label:"Auto"
-  },
-
-  {
-    id:"chat",
-    icon:MessageSquare,
-    label:"Chat"
-  },
-
-  {
-    id:"coding",
-    icon:Code2,
-    label:"Coding"
-  },
-
-  {
-    id:"pdf",
-    icon:FileText,
-    label:"PDF"
-  },
-
-  {
-    id:"ppt",
-    icon:Presentation,
-    label:"PPT"
-  },
-
-  {
-    id:"image",
-    icon:ImageIcon,
-    label:"Image"
-  },
-
-  {
-    id:"search",
-    icon:Globe,
-    label:"Search"
-  }
-
-];
+  const agents = AGENTS;
 
 // ── Voice input ───────────────────────────────────────────────────────────
 // Recorded in the browser with MediaRecorder, transcribed server-side by
@@ -294,18 +250,27 @@ const toggleMic = () => {
     try {
 
 
-      let conversation = selectedConversation;
+      // Incognito skips both writes: no Conversation row to create, and no
+      // title to store. The ephemeral id only ever reaches the agent's Redis
+      // memory, which is what keeps the session multi-turn.
+      let conversationId = incognitoId;
 
-      if (!conversation) {
-        const newConversation = await createConversation();
-        dispatch(addConversation(newConversation));
-        dispatch(setSelectedConversation(newConversation));
-        conversation = newConversation;
-      }
+      if (!incognito) {
+        let conversation = selectedConversation;
 
-      if (conversation.title === "New Chat") {
-        await updateConversations(conversation._id, title);
-        dispatch(setConvTitle({ conversationId: conversation._id, title }));
+        if (!conversation) {
+          const newConversation = await createConversation();
+          dispatch(addConversation(newConversation));
+          dispatch(setSelectedConversation(newConversation));
+          conversation = newConversation;
+        }
+
+        if (conversation.title === "New Chat") {
+          await updateConversations(conversation._id, title);
+          dispatch(setConvTitle({ conversationId: conversation._id, title }));
+        }
+
+        conversationId = conversation._id;
       }
 
       dispatch(addMessage({ role: "user", content: prompt }));
@@ -315,7 +280,12 @@ const toggleMic = () => {
 
 formData.append(
     "conversationId",
-    conversation._id
+    conversationId
+);
+
+formData.append(
+    "incognito",
+    String(Boolean(incognito))
 );
 
 formData.append(
@@ -437,7 +407,7 @@ catch(error){
 
         <button
           key={agent.id}
-          onClick={() => setSelectedAgent(agent.id)}
+          onClick={() => dispatch(setSelectedAgent(agent.id))}
           className={`
             flex-shrink-0
             

@@ -50,6 +50,11 @@ Annotation.Root({
 
  // Marks a response as an error so the controller can skip persisting it.
  isError:
+ Annotation(),
+
+ // Which MCP tools the answer ran. Undeclared keys are dropped by LangGraph,
+ // so without this the chat agent's tool list never reaches the controller.
+ toolCalls:
  Annotation()
 
 });

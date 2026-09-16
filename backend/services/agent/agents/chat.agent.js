@@ -4,6 +4,7 @@ import { getModel } from "../utils/model.js";
 import { checkAgentLimit } from "../config/agentRateLimit.js";
 import { deductCredits } from "../utils/deductCredits.js";
 import { describeNow } from "../utils/now.js";
+import { runWithMcpTools } from "../utils/mcp/runTools.js";
 
 
 export const chatAgent =
@@ -187,20 +188,28 @@ Formatting:
 
  );
 
- const response = await llm.invoke(messages);
+ // Runs the model with whatever MCP tools the user has enabled bound to it,
+ // and falls back to a plain invoke when there are none.
+ const { response, toolCalls, mcpErrors } = await runWithMcpTools({
+   llm,
+   messages,
+   userId: state.userId
+ });
 
+ if (mcpErrors?.length) {
+   console.warn("[mcp] unreachable servers:", mcpErrors);
+ }
 
+ const images = state.searchResults?.images || [];
 
-const images = state.searchResults?.images || [];
-
-
-
-return {
+ return {
   ...state,
 
-  response:response.content,
-  images:images
-  
+  response,
+  images:images,
+  // Surfaced to the client so the UI can show what the answer actually ran.
+  toolCalls: toolCalls || []
+
 };
 
 };

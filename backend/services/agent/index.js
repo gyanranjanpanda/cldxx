@@ -29,9 +29,15 @@ app.use((err, req, res, next) => {
 
   if (err.status) {
 
+    // Axios rejections carry a `status` but no `data` in the shape the credit
+    // errors use, so this used to answer with an empty body -- the browser saw
+    // a failed request it could not explain. Always send something readable.
     return res
       .status(err.status)
-      .json(err.data);
+      .json(err.data ?? {
+        success: false,
+        message: err.message || "Request failed"
+      });
 
   }
 

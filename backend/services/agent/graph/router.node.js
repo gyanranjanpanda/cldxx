@@ -2,6 +2,7 @@ import { getModel } from "../utils/model.js";
 import { parseRepoUrl } from "../utils/github.js";
 import { isClockQuestion } from "../utils/now.js";
 import redis from "../../../shared/redis/redis.js";
+import { wantsMcpTools } from "../utils/mcp/intent.js";
 
 export const routerNode =
 async(state)=>{
@@ -32,6 +33,24 @@ if (
 // hours behind. Placed after the explicit-agent check so picking Search by
 // hand still searches.
 if(!state.file && isClockQuestion(state.prompt)){
+
+    return{
+
+        ...state,
+
+        agent:"chat"
+
+    };
+
+}
+
+
+// Naming an MCP server or one of its tools is an explicit instruction to use
+// it. The classifier below has no idea MCP exists and read "use the manim mcp
+// server to create X" as a coding request, which answered with a generated
+// project instead of calling the tool. Tools are bound on the chat agent, so
+// that is where this has to land.
+if(!state.file && await wantsMcpTools(state.userId, state.prompt)){
 
     return{
 

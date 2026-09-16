@@ -4,7 +4,9 @@ import { useDispatch, useSelector } from "react-redux";
 import { getMessages } from "../features/message.api";
 import { setArtifacts, setMessages } from "../redux/message.slice";
 import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { pickGreeting } from "../utils/greeting";
+import { Ghost } from "lucide-react";
 function NeuralPulse() {
   return (
     <div className="relative w-9 h-9 flex items-center justify-center shrink-0">
@@ -85,8 +87,21 @@ export default function MessageList() {
 
   const bottomRef = useRef(null);
   const { messages, isLoading } = useSelector(state => state.message);
-  const { selectedConversation } = useSelector(state => state.conversation);
+  const { selectedConversation, incognito } = useSelector(state => state.conversation);
+  const { userData } = useSelector(state => state.user);
   const dispatch = useDispatch();
+
+  const isEmpty = messages.length === 0 && !isLoading;
+
+  // Re-rolled whenever the blank state comes back, so every new chat opens on a
+  // different line instead of the same sentence for the whole session.
+  const greeting = useMemo(
+    () => pickGreeting(userData?.name),
+    // isEmpty and the conversation id are the re-roll triggers, not inputs --
+    // that is the point of listing them, so the "unnecessary dep" rule is off.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isEmpty, userData?.name, selectedConversation?._id]
+  );
 useEffect(() => {
 
   requestAnimationFrame(() => {
@@ -135,23 +150,43 @@ if (latestArtifactMessage) {
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 space-y-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {messages.length === 0 && !isLoading ? (
-        <div className="h-full flex flex-col items-center justify-center gap-4 text-center">
-          <div className="flex flex-col gap-1.5">
-            <h1 className="text-[20px] font-semibold text-slate-200 tracking-tight">cldxAI</h1>
-            <h3 className="text-[15px] font-semibold text-slate-400 tracking-tight">How can I help you?</h3>
-            <p className="text-[13px] text-slate-600 max-w-[260px] leading-relaxed">Ask me anything — code, ideas, explanations, or just a quick question.</p>
+      {isEmpty && incognito ? (
+        <div className="h-full flex flex-col items-center justify-center gap-3 text-center select-none">
+          <div className="flex items-center justify-center w-11 h-11 rounded-2xl bg-fuchsia-500/10 border border-fuchsia-500/20">
+            <Ghost size={21} className="text-fuchsia-300" strokeWidth={1.5} />
           </div>
-          <div className="flex flex-wrap justify-center gap-2 mt-1">
-            {["Write a Netflix clone", "Explain Redis", "Build a dashboard"].map((s) => (
-              <button
-                key={s}
-                className="text-[12px] text-slate-400 bg-white/[0.04] border border-white/[0.07] px-3.5 py-1.5 rounded-lg hover:bg-white/[0.08] hover:text-slate-200 transition-colors duration-150 cursor-pointer"
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+          <h1 className="text-[26px] sm:text-[30px] font-semibold tracking-tight leading-snug text-slate-100">
+            Incognito chat
+          </h1>
+          <p className="text-[13px] text-slate-500 max-w-[330px] leading-relaxed">
+            This one stays off the record — nothing here is written to your history,
+            and it disappears when you switch back or reload.
+          </p>
+        </div>
+      ) : isEmpty ? (
+        <div className="h-full flex flex-col items-center justify-center gap-3 text-center select-none">
+          <motion.div
+            key={greeting.mood}
+            initial={{ opacity: 0, scale: 0.85 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            className="flex items-center justify-center w-11 h-11 rounded-2xl bg-white/[0.04] border border-white/[0.07]"
+          >
+            <greeting.icon size={21} className={greeting.iconColor} strokeWidth={1.5} />
+          </motion.div>
+
+          <motion.h1
+            key={greeting.line}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+            className="text-[26px] sm:text-[30px] font-semibold tracking-tight leading-snug"
+          >
+            <span className="text-slate-100">{greeting.hey}</span>{" "}
+            <span className={`bg-gradient-to-r ${greeting.accent} bg-clip-text text-transparent`}>
+              {greeting.line}
+            </span>
+          </motion.h1>
         </div>
       ) : (
         <>
