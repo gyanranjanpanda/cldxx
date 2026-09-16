@@ -20,6 +20,8 @@ import billingRouter from "./modules/billing/routes/billing.routes.js";
 import internalRouter from "./routes/internal.routes.js";
 import speechRouter from "./modules/speech/routes/speech.routes.js";
 import mcpRouter from "./modules/mcp/routes/mcp.routes.js";
+import inviteRouter from "./modules/invite/routes/invite.routes.js";
+import sharedRouter from "./modules/invite/routes/shared.routes.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, ".env") });
@@ -51,6 +53,12 @@ app.use("/api/me", protect, getCurrentUser);
 app.use("/api/chat", protect, injectUser, json, chatRouter);
 app.use("/api/billing", protect, injectUser, json, billingRouter);
 app.use("/api/mcp", protect, injectUser, json, mcpRouter);
+app.use("/api/invites", protect, injectUser, json, inviteRouter);
+
+// Guests have no session by design, so this router is NOT behind `protect`.
+// Its own token check is the entire authorisation, and it can reach exactly
+// one conversation -- see modules/invite/controllers.
+app.use("/api/shared", json, sharedRouter);
 
 // No `json` here: the body is a raw audio blob, parsed inside the route.
 app.use("/api/speech", protect, speechRouter);

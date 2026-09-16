@@ -1,7 +1,10 @@
-import { MessageSquare, Ghost } from "lucide-react";
+import { MessageSquare, Ghost, Share2 } from "lucide-react";
 import { useSelector } from "react-redux";
+import { useState } from "react";
+import ShareDialog from "./ShareDialog";
 
 export default function Navbar() {
+  const [showShare, setShowShare] = useState(false);
   const { selectedConversation, incognito } = useSelector(state => state.conversation);
   const {messages} = useSelector(state => state.message);
   return (
@@ -29,7 +32,26 @@ export default function Navbar() {
       </div>
 
       {/* Right — actions */}
-     
+      <div className="flex items-center gap-1.5">
+        {/* Only a stored conversation can be shared: incognito has no row to
+            point a link at, and an unsaved chat has nothing to show a guest. */}
+        {selectedConversation && !incognito && (
+          <button
+            onClick={() => setShowShare(true)}
+            title="Share this chat"
+            className="flex items-center gap-1.5 text-[12px] font-medium text-slate-300 bg-white/[0.05] border border-white/[0.08] px-2.5 h-[30px] rounded-lg hover:bg-white/[0.09] cursor-pointer transition-colors duration-150"
+          >
+            <Share2 size={13} />
+            Share
+          </button>
+        )}
+      </div>
+
+      <ShareDialog
+        open={showShare}
+        onClose={() => setShowShare(false)}
+        conversation={selectedConversation}
+      />
 
     </div>
   );

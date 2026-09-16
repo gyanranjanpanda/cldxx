@@ -47,6 +47,13 @@ new mongoose.Schema({
   content:String,
   images:[String],
 
+  // True when this turn arrived through a share link rather than from the
+  // owner, so the transcript shows who actually said what.
+  guest:{
+    type:Boolean,
+    default:false
+  },
+
   artifacts:[artifactSchema]
 
 },{
