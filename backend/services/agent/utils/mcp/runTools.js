@@ -1,5 +1,6 @@
 import { AIMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
 import { McpSession, fetchServers } from "./registry.js";
+import { selectServers } from "./intent.js";
 import { newFence, untrustedContentRules, wrapUntrusted } from "../guardrails.js";
 
 // Each round trip is a full model call, so this caps cost and stops a server
@@ -9,6 +10,94 @@ const MAX_ROUNDS = Number(process.env.MCP_MAX_TOOL_ROUNDS) || 5;
 // Big tool outputs (a file listing, a scrape) blow the context window and push
 // the real conversation out of it.
 const MAX_RESULT_CHARS = Number(process.env.MCP_MAX_RESULT_CHARS) || 8000;
+
+// A bound tool's schema is prompt text, billed and counted against the
+// provider's per-minute token budget whether or not the tool is called. One
+// server with 45 tools serializes to ~50k characters, and a free tier rejects
+// the request outright rather than truncating it, so the whole turn fails
+// before the model reads a word. Budgeted in characters because that is what
+// we can measure without a tokeniser; ~5 characters per token in practice.
+const MAX_SCHEMA_CHARS = Number(process.env.MCP_MAX_TOOL_SCHEMA_CHARS) || 8000;
+
+const lastUserText = (messages = []) => {
+
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+
+    const message = messages[index];
+
+    if (message?.getType?.() !== "human") continue;
+
+    return typeof message.content === "string"
+      ? message.content
+      : (Array.isArray(message.content)
+          ? message.content.map((block) => block?.text ?? "").join(" ")
+          : String(message.content ?? ""));
+
+  }
+
+  return "";
+
+};
+
+/**
+ * Trims the tool list to what fits the schema budget, keeping whatever the
+ * prompt looks most likely to need.
+ *
+ * Ranked rather than truncated: the first tools a server happens to list are
+ * not the ones the request is about. Ties break on name so the same prompt
+ * sends the same tool list twice -- an order that shuffles per request would
+ * defeat prompt caching on providers that have it.
+ */
+const fitToBudget = (specs, prompt) => {
+
+  const size  = (spec) => JSON.stringify(spec).length;
+  const total = specs.reduce((sum, spec) => sum + size(spec), 0);
+
+  if (total <= MAX_SCHEMA_CHARS) return { specs, dropped: [] };
+
+  const words = String(prompt || "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length >= 4);
+
+  const score = (spec) => {
+
+    const text = `${spec.function?.name || ""} ${spec.function?.description || ""}`
+      .toLowerCase();
+
+    return words.reduce((hits, word) => hits + (text.includes(word) ? 1 : 0), 0);
+
+  };
+
+  const ranked = [...specs].sort((a, b) =>
+    score(b) - score(a) ||
+    String(a.function?.name).localeCompare(String(b.function?.name))
+  );
+
+  const kept    = [];
+  const dropped = [];
+
+  let used = 0;
+
+  ranked.forEach((spec) => {
+
+    if (used + size(spec) <= MAX_SCHEMA_CHARS) {
+      kept.push(spec);
+      used += size(spec);
+      return;
+    }
+
+    dropped.push(spec.function?.name);
+
+  });
+
+  // Sending the tools back in discovery order keeps the request stable for a
+  // given prompt regardless of how ranking shuffled them.
+  const order = new Map(specs.map((spec, index) => [spec, index]));
+
+  return { specs: kept.sort((a, b) => order.get(a) - order.get(b)), dropped };
+
+};
 
 // Binding tools is not the same as using them. The chat prompt tells the model
 // to answer in Markdown and never to mention internal tools, which read as
@@ -188,16 +277,37 @@ export const runWithMcpTools = async ({ llm, messages, userId }) => {
 
   try {
 
-    const { servers, stdioAllowed } = await fetchServers(userId);
+    const { servers: available, stdioAllowed } = await fetchServers(userId);
 
-    if (!servers.length) {
+    if (!available.length) {
       const reply = await llm.invoke(messages);
       return { response: readReply(reply), toolCalls: [], mcpErrors: [] };
     }
 
+    const prompt = lastUserText(messages);
+
+    // Naming a server also narrows what gets connected, so an unnamed server's
+    // process is never spawned and its tools are never paid for this turn.
+    const servers = selectServers(prompt, available);
+
     session = new McpSession(servers, { stdioAllowed });
 
-    const { specs, errors } = await session.discover();
+    const { specs: discovered, errors } = await session.discover();
+
+    const { specs, dropped } = fitToBudget(discovered, prompt);
+
+    if (dropped.length) {
+
+      console.warn(
+        `[mcp] ${dropped.length} tool schema(s) left out to stay under ${MAX_SCHEMA_CHARS} chars`
+      );
+
+      errors.push({
+        server: "mcp",
+        error: `${dropped.length} of ${discovered.length} tools were not offered to the model this turn to stay inside its token budget. Name the server you want, or disable one you are not using.`
+      });
+
+    }
 
     if (!specs.length) {
       const reply = await llm.invoke(messages);

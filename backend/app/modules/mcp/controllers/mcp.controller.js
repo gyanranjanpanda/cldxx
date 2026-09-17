@@ -71,12 +71,18 @@ const validateSecrets = (pairs, label) => {
 
   for (const pair of pairs || []) {
 
-    if (pair?.key && !/^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/.test(pair.key)) {
-      return `Invalid ${label} name: ${pair.key}`;
+    // Trimmed before the test because encryptPairs and mergeSecrets already
+    // store the trimmed key. A pasted "Authorization " was refused here for a
+    // space that would never have been saved -- and the message echoed the
+    // padded name, so it read as "Invalid header name: Authorization".
+    const key = String(pair?.key ?? "").trim();
+
+    if (key && !/^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/.test(key)) {
+      return `Invalid ${label} name: ${key}`;
     }
 
     if (/[\r\n\0]/.test(String(pair?.value ?? ""))) {
-      return `Invalid value for ${label} ${pair.key}`;
+      return `Invalid value for ${label} ${key}`;
     }
 
   }
