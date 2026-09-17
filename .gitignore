@@ -6,6 +6,7 @@ node_modules/
 .env
 .env.*
 !.env.example
+!.env.sovereign.example
 *.pem
 *.key
 serviceAccount.json
@@ -44,3 +45,7 @@ Thumbs.db
 # Temporary files
 temp/
 **/temp/
+
+# Sovereign Mode runtime output
+backend/services/agent/audit/
+backend/services/agent/artifacts/

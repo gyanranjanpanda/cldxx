@@ -55,7 +55,7 @@ export const codingAgent = async (state) => {
   await checkAgentLimit(state.userId, "coding");
   await deductCredits(state.userId, "coding");
 
-  const llm = getModel("coding");
+  const llm = getModel("coding", state);
 
   const response = await llm.invoke(`You are cldxAI Coding Agent.
 

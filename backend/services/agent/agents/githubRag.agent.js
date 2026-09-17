@@ -5,7 +5,7 @@ import { newFence, untrustedContentRules, wrapUntrusted } from "../utils/guardra
 
 import redis from "../../../shared/redis/redis.js";
 import { getModel } from "../utils/model.js";
-import { embeddings } from "../utils/embedding.js";
+import { getEmbeddings } from "../utils/embedding.js";
 import { createVectorStore } from "../utils/vectorStore.js";
 import { checkAgentLimit } from "../config/agentRateLimit.js";
 import { deductCredits } from "../utils/deductCredits.js";
@@ -139,7 +139,7 @@ export const githubRagAgent = async (state) => {
     if (usingQdrant && (await collectionExists(collectionName))) {
       // Already indexed at this exact commit, so skip fetching and embedding.
       try {
-        store = await QdrantVectorStore.fromExistingCollection(embeddings, {
+        store = await QdrantVectorStore.fromExistingCollection(getEmbeddings(state), {
           url: process.env.QDRANT_URL,
           apiKey: process.env.QDRANT_API_KEY,
           collectionName
@@ -170,7 +170,7 @@ export const githubRagAgent = async (state) => {
       // createVectorStore already falls back to an in-memory store when Qdrant
       // is unavailable, which is why the build path goes through it rather than
       // constructing a QdrantVectorStore directly.
-      const built = await createVectorStore(collectionName, docs);
+      const built = await createVectorStore(collectionName, docs, state);
       store = built.store;
 
       if (built.backend !== "qdrant") rememberInProcess(collectionName, store);
@@ -193,7 +193,7 @@ export const githubRagAgent = async (state) => {
         ? `\nRepository file tree:\n${treeSummary(fileInfo.allPaths)}\n\nREADME:\n${wrapUntrusted(readmeExcerpt(fileInfo.files), { source: `README of ${meta.owner}/${meta.repo}`, fence })}\n`
         : "";
 
-    const llm = getModel("chat");
+    const llm = getModel("chat", state);
 
     // Anyone can put anything in a README. This content is interpolated into
     // the system message, so unfenced it would carry system authority.

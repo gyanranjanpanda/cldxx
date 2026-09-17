@@ -26,7 +26,7 @@ await checkAgentLimit(
 
 
  const llm =
- getModel("chat");
+ getModel("chat", state);
 
  const history =
  await getMemory(

@@ -64,3 +64,41 @@ embeddings.embedDocuments = async (texts) => {
 
   return vectors;
 };
+
+// ── Sovereign embeddings ────────────────────────────────────────────────────
+//
+// The embedding model is the leak nobody notices. A confidential PDF sent to
+// gemini-embedding-001 has already left the building, and no LLM was ever
+// called -- so routing chat to a local model while RAG still embeds against
+// Google would defeat the whole mode. In Sovereign Mode retrieval has to use a
+// local embedder or not run at all.
+
+import { OpenAIEmbeddings } from "@langchain/openai";
+import {
+  SOVEREIGN_BASE_URL,
+  SOVEREIGN_API_KEY,
+  PolicyDenied
+} from "./sovereign.js";
+
+let sovereignEmbeddings = null;
+
+export const getEmbeddings = (state = {}) => {
+  if (state.sovereign !== true) return embeddings;
+
+  if (!SOVEREIGN_BASE_URL) {
+    throw new PolicyDenied(
+      "Sovereign Mode is on but no local embedding endpoint is configured. Set SOVEREIGN_BASE_URL. Refusing to embed against a cloud provider.",
+      "SOV-003"
+    );
+  }
+
+  if (!sovereignEmbeddings) {
+    sovereignEmbeddings = new OpenAIEmbeddings({
+      apiKey: SOVEREIGN_API_KEY,
+      model: process.env.SOVEREIGN_EMBEDDING_MODEL || "nomic-embed-text",
+      configuration: { baseURL: SOVEREIGN_BASE_URL },
+    });
+  }
+
+  return sovereignEmbeddings;
+};
