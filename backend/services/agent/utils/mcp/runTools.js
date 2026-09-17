@@ -13,11 +13,19 @@ const MAX_RESULT_CHARS = Number(process.env.MCP_MAX_RESULT_CHARS) || 8000;
 
 // A bound tool's schema is prompt text, billed and counted against the
 // provider's per-minute token budget whether or not the tool is called. One
-// server with 45 tools serializes to ~50k characters, and a free tier rejects
+// server with 45 tools serialises to ~49k characters, and a free tier rejects
 // the request outright rather than truncating it, so the whole turn fails
-// before the model reads a word. Budgeted in characters because that is what
-// we can measure without a tokeniser; ~5 characters per token in practice.
-const MAX_SCHEMA_CHARS = Number(process.env.MCP_MAX_TOOL_SCHEMA_CHARS) || 8000;
+// before the model reads a word.
+//
+// Measured in characters because that is what we can count without a
+// tokeniser; the provider's limit is in TOKENS, roughly four characters each.
+//
+// A free Groq key allows 8k tokens per MINUTE for everything -- schemas,
+// system prompt, history and reply, across every request in that window -- so
+// spending 5k of it on tool definitions leaves a turn that cannot afford a
+// second one. 10k characters is ~2.5k tokens, which keeps the right tools
+// bound and still leaves room to hold a conversation.
+const MAX_SCHEMA_CHARS = Number(process.env.MCP_MAX_TOOL_SCHEMA_CHARS) || 10000;
 
 const lastUserText = (messages = []) => {
 
@@ -60,12 +68,54 @@ const fitToBudget = (specs, prompt) => {
     .split(/[^a-z0-9]+/)
     .filter((word) => word.length >= 4);
 
+  // People describe what they want done, not what the tool is called. "read the
+  // repo" has no word in common with `get_file_contents`, so plain substring
+  // matching ranked every issue/PR tool above it -- the model then reported,
+  // accurately, that it had no way to read a file. Each intent word also counts
+  // for the vocabulary a tool author would have used.
+  const SYNONYMS = {
+    read:     ["get", "contents", "file", "fetch", "view", "show"],
+    show:     ["get", "contents", "view"],
+    view:     ["get", "contents", "file"],
+    open:     ["get", "contents", "file"],
+    file:     ["contents", "path", "blob"],
+    files:    ["contents", "path", "blob"],
+    code:     ["contents", "file", "blob"],
+    workflow: ["contents", "file", "actions", "run"],
+    repo:     ["repository", "contents"],
+    repos:    ["repository"],
+    summarise:["get", "contents", "list"],
+    summarize:["get", "contents", "list"],
+    list:     ["list", "search"],
+    find:     ["search", "list"],
+    search:   ["search", "list"]
+  };
+
+  const expanded = new Set(words);
+
+  words.forEach((word) => {
+    (SYNONYMS[word] || []).forEach((alias) => expanded.add(alias));
+    // "reposetry" should still reach "repository": a shared five-character
+    // prefix survives the typos people actually make.
+    if (word.length >= 6) expanded.add(word.slice(0, 5));
+  });
+
   const score = (spec) => {
 
-    const text = `${spec.function?.name || ""} ${spec.function?.description || ""}`
-      .toLowerCase();
+    const name = String(spec.function?.name || "").toLowerCase();
+    const description = String(spec.function?.description || "").toLowerCase();
 
-    return words.reduce((hits, word) => hits + (text.includes(word) ? 1 : 0), 0);
+    let total = 0;
+
+    expanded.forEach((word) => {
+      // A hit in the name is a far stronger signal than one buried in prose:
+      // every GitHub description mentions "repository", so matching there
+      // separates nothing.
+      if (name.includes(word)) total += 3;
+      else if (description.includes(word)) total += 1;
+    });
+
+    return total;
 
   };
 
