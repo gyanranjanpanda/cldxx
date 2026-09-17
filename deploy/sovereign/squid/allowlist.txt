@@ -1,0 +1,31 @@
+# Destinations a CONNECTED install may reach. An air-gapped install leaves this
+# file empty -- the proxy then denies everything, which is the intended state.
+#
+# Add only what a feature actually needs, and expect to justify each line to
+# whoever accredits the deployment. A leading dot matches subdomains.
+
+# ── Cloud model providers (Cloud Mode only) ─────────────────────────────────
+api.anthropic.com
+api.openai.com
+generativelanguage.googleapis.com
+api.groq.com
+openrouter.ai
+
+# ── Auth ────────────────────────────────────────────────────────────────────
+accounts.google.com
+oauth2.googleapis.com
+www.googleapis.com
+
+# ── Feature integrations ────────────────────────────────────────────────────
+api.github.com
+api.tavily.com
+api.sarvam.ai
+
+# Deliberately NOT listed, and each one is a decision rather than an oversight:
+#
+#   fonts.googleapis.com     the PDF renderer now embeds its own fonts
+#   cdnjs.cloudflare.com     Prism is inlined from node_modules
+#   cdn.jsdelivr.net         Mermaid is inlined from node_modules
+#   *.cloud.qdrant.io        sovereign vectors belong in the local Qdrant
+#   *.amazonaws.com          sovereign artefacts stay on local disk
+#   registry.npmjs.org       dependencies are baked into the image at build
