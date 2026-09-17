@@ -76,7 +76,57 @@ const loadVocabulary = async (userId) => {
 
 };
 
+const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 export const forgetVocabulary = (userId) => redis.del(cacheKey(userId));
+
+/**
+ * The servers a prompt actually names, or all of them when it names none.
+ *
+ * Every bound tool's schema is prompt text the provider bills and counts
+ * against the per-minute token budget: 45 GitHub tools serialize to ~9k tokens
+ * on their own, which a free tier refuses outright ("Request too large ...
+ * Limit 8000, Requested 9125") before any conversation is added. "Use the
+ * manim server" is an explicit choice of one server, so honour it and leave
+ * the other 45 tools out of the request rather than paying for them unused.
+ *
+ * Falls back to every server when nothing is named -- the model still needs to
+ * see what it can reach when the user does not say.
+ */
+export const selectServers = (prompt, servers = []) => {
+
+  const text = String(prompt || "").toLowerCase();
+
+  if (!text || servers.length < 2) return servers;
+
+  const named = servers.filter((server) => {
+
+    const words = tokenise(server.name).filter((word) => !TOO_GENERIC.has(word));
+
+    if (words.some((word) => new RegExp(`\\b${escape(word)}\\b`).test(text))) {
+      return true;
+    }
+
+    // Tool names are matched whole for the same reason buildVocabulary does
+    // it: the fragments of "execute_manim_code" appear in ordinary requests.
+    return (server.tools || []).some((tool) => {
+
+      const name = String(tool?.name ?? tool).toLowerCase();
+      // Stored names are namespaced ("manim__execute_manim_code"); a person
+      // types the bare tool name, not the qualified one.
+      const bare = name.includes("__") ? name.slice(name.indexOf("__") + 2) : name;
+
+      return [name, bare].some((form) =>
+        text.includes(form) || text.includes(form.replace(/[_-]+/g, " "))
+      );
+
+    });
+
+  });
+
+  return named.length ? named : servers;
+
+};
 
 /**
  * What the user's tools can do, in one short block. The router shows this to
@@ -110,8 +160,6 @@ export const describeTools = async (userId) => {
   }
 
 };
-
-const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /**
  * True when the prompt names one of the user's MCP servers or its tools, or

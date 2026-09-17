@@ -45,7 +45,7 @@ const children = [];
 
 for (const svc of services) {
   console.log(`[${svc.name}] Spawning on port ${svc.port}...`);
-  const child = spawn(nodeBin, [svc.script], {
+  const child = spawn(nodeBin, ["--watch", svc.script], {
     cwd: svc.cwd,
     env: { ...process.env, PORT: String(svc.port) },
     stdio: ["ignore", "pipe", "pipe"]

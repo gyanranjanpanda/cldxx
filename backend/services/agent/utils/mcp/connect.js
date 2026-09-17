@@ -15,7 +15,8 @@ export const CALL_TIMEOUT_MS    = Number(process.env.MCP_CALL_TIMEOUT_MS)    || 
 
 const pairsToObject = (pairs = []) =>
   pairs.reduce((out, pair) => {
-    if (pair?.key) out[pair.key] = pair.value ?? "";
+    const key = String(pair?.key ?? "").trim();
+    if (key) out[key] = pair.value ?? "";
     return out;
   }, {});
 
