@@ -5,7 +5,6 @@
 # whoever accredits the deployment. A leading dot matches subdomains.
 
 # ── Cloud model providers (Cloud Mode only) ─────────────────────────────────
-api.anthropic.com
 api.openai.com
 generativelanguage.googleapis.com
 api.groq.com
