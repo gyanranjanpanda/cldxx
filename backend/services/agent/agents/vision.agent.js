@@ -23,7 +23,7 @@ export const visionAgent = async (state) => {
     );
 
     const llm =
-      getModel("vision");
+      getModel("vision", state);
 
     const imageBuffer =
       await fs.readFile(

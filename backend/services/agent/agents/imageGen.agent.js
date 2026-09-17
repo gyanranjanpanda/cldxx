@@ -34,7 +34,7 @@ await checkAgentLimit(
 
 
     const llm =
-      getModel("image");
+      getModel("image", state);
 
     const promptResponse =
       await llm.invoke(`

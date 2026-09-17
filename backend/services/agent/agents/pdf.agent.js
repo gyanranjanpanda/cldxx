@@ -11,8 +11,7 @@
  */
 
 import { generateDocument } from "../docgen/pipeline.js";
-import { uploadToS3 }       from "../utils/uploadToS3.js";
-import { getDownloadUrl }   from "../utils/getDownloadUrl.js";
+import { storeArtifact }     from "../utils/storage.js";
 import { checkAgentLimit }   from "../config/agentRateLimit.js";
 import { deductCredits }     from "../utils/deductCredits.js";
 
@@ -25,11 +24,11 @@ export const pdfAgent = async (state) => {
       topic:  state.prompt,
       theme:  "professional",
       format: "pdf",
+      sovereign: state.sovereign === true,
     });
 
     const fileName = `pdf-${Date.now()}.pdf`;
-    await uploadToS3(buffer, fileName, "application/pdf");
-    const downloadUrl = await getDownloadUrl(fileName, 24 * 60 * 60);
+    const downloadUrl = await storeArtifact(buffer, fileName, "application/pdf", state);
 
     return {
       ...state,

@@ -2,6 +2,7 @@ import redis from "../../../shared/redis/redis.js";
 import { graph } from "../graph/supervisor.graph.js";
 import { addMessage, isEphemeral } from "../utils/memory.js";
 import { internalApi } from "../utils/internalApi.js"
+import { isSovereign } from "../utils/sovereign.js";
 
 export const chat =
 async(req,res,next)=>{
@@ -18,7 +19,9 @@ async(req,res,next)=>{
 
    timezone,
 
-   incognito
+   incognito,
+
+   sovereign
 
 } = req.body;
 
@@ -32,6 +35,12 @@ const isIncognito =
  isEphemeral(conversationId) ||
  incognito === true ||
  incognito === "true";
+
+// Sovereign Mode is decided per turn, not per deployment, so it arrives with
+// the request. Over multipart/form-data every field is a string, which is why
+// this is not a bare boolean check.
+const isSovereignTurn =
+ isSovereign(sovereign);
 
 // Redis still gets the turn either way -- that is what makes the *next* message
 // in this session aware of this one. For incognito it expires on its own.
@@ -70,7 +79,8 @@ if(!isIncognito){
    ],
    agent,
    timezone,
-   file:req.file
+   file:req.file,
+   sovereign:isSovereignTurn
 
   });
 
@@ -111,6 +121,9 @@ if(!isIncognito){
  success:true,
 
  incognito:isIncognito,
+
+ zone:
+ isSovereignTurn ? "SOVEREIGN" : "CLOUD",
 
  answer:
  result.response,

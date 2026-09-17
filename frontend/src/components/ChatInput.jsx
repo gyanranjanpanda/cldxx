@@ -37,7 +37,7 @@ const [isListening, setIsListening] = useState(false);
 
 const [isTranscribing, setIsTranscribing] = useState(false);
   const dispatch = useDispatch();
-  const { selectedConversation, selectedAgent, incognito, incognitoId } = useSelector(state => state.conversation);
+  const { selectedConversation, selectedAgent, incognito, incognitoId, sovereign } = useSelector(state => state.conversation);
    const { isLoading } = useSelector(state => state.message);
 const fileRef = useRef(null);
 
@@ -281,6 +281,11 @@ const toggleMic = () => {
 formData.append(
     "conversationId",
     conversationId
+);
+
+formData.append(
+    "sovereign",
+    String(Boolean(sovereign))
 );
 
 formData.append(

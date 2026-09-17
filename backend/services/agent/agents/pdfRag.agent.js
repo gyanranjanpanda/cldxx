@@ -50,7 +50,7 @@ export const pdfRagAgent = async (state) => {
 
       const docs = await splitter.createDocuments([text]);
 
-      const created = await createVectorStore(collectionName, docs);
+      const created = await createVectorStore(collectionName, docs, state);
       backend = created.backend;
 
       const relevantDocs = await created.store.similaritySearch(state.prompt, 8);
@@ -58,7 +58,7 @@ export const pdfRagAgent = async (state) => {
       context = relevantDocs.map((doc) => doc.pageContent).join("\n\n");
     }
 
-    const llm = getModel("pdf_rag");
+    const llm = getModel("pdf_rag", state);
 
     // An uploaded file is attacker-controlled whenever the user did not write
     // it themselves -- a forwarded PDF, a downloaded report, a CSV export.

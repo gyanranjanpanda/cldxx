@@ -20,7 +20,12 @@ const initialState = {
   // The id is minted here so the agent can key its Redis memory on it and the
   // session keeps context without ever creating a Conversation row.
   incognito:false,
-  incognitoId:null
+  incognitoId:null,
+  // Sovereign: the turn is answered by a model the organisation runs itself.
+  // Unlike incognito this is not about storage -- it decides which zone the
+  // prompt is allowed to reach, so it is sent with every request rather than
+  // being inferred from the conversation id.
+  sovereign:false
 }
 
 export const conversationSlice = createSlice({
@@ -52,6 +57,12 @@ export const conversationSlice = createSlice({
     state.incognitoId = null;
 
    }
+
+  },
+
+  setSovereign: (state,action)=>{
+
+   state.sovereign = Boolean(action.payload);
 
   },
 
@@ -134,6 +145,6 @@ setConvTitle:(state,action)=>{
 })
 
 // Action creators are generated for each case reducer function
-export const {setConversations,addConversation,setSelectedConversation,setSelectedAgent,setIncognito,setConvTitle,removeConversation} = conversationSlice.actions
+export const {setConversations,addConversation,setSelectedConversation,setSelectedAgent,setIncognito,setSovereign,setConvTitle,removeConversation} = conversationSlice.actions
 
 export default conversationSlice.reducer

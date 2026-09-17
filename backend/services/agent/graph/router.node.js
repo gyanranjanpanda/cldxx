@@ -3,9 +3,20 @@ import { parseRepoUrl } from "../utils/github.js";
 import { isClockQuestion } from "../utils/now.js";
 import redis from "../../../shared/redis/redis.js";
 import { describeTools, wantsMcpTools } from "../utils/mcp/intent.js";
+import { CLOUD_ONLY_AGENTS, assertSovereignReady } from "../utils/sovereign.js";
 
 export const routerNode =
 async(state)=>{
+
+// The zone is settled before anything else runs. Agents deduct credits as
+// their first act, so leaving this to getModel meant a turn that policy was
+// always going to refuse still charged the user for it -- and an explicitly
+// picked agent skipped the router's own model call, so nothing checked at all.
+if(state.sovereign === true){
+
+    assertSovereignReady();
+
+}
 
 
 if (
@@ -15,6 +26,24 @@ if (
     state.agent !== "auto"
 
 ) {
+
+    // A hand-picked agent still has to clear policy. Sending a confidential
+    // turn to Search because the user left the Search tab selected would put
+    // the prompt in front of Tavily, which is precisely what the mode forbids.
+    if(
+        state.sovereign === true &&
+        CLOUD_ONLY_AGENTS.has(state.agent)
+    ){
+
+        return {
+
+            ...state,
+
+            agent: "chat"
+
+        };
+
+    }
 
     return {
 
@@ -114,7 +143,7 @@ if(state.file){
 
 
  const llm =
- getModel("router");
+ getModel("router", state);
 
 // Naming the server is not the only way to ask for it. "render an animation of
 // a bouncing ball" should reach the tool that renders animations, so the
@@ -229,8 +258,21 @@ ${state.prompt}
   /\b(chat|search|coding|pdf|ppt|image)\b/
  );
 
- const picked =
+ let picked =
  match ? match[1] : "chat";
+
+ // The classifier is never shown the zone, so it can still answer "search" or
+ // "image" on a sovereign turn. getModel would refuse those, but failing the
+ // turn is a worse answer than giving the user the agent that can actually run
+ // locally.
+ if(
+  state.sovereign === true &&
+  CLOUD_ONLY_AGENTS.has(picked)
+ ){
+
+  picked = "chat";
+
+ }
 
  // Once a conversation is about a repository, follow-ups drop the URL -- "which
  // file does X" then routes to coding and gets answered from the model's

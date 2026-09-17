@@ -1,0 +1,33 @@
+# Agent service (LangGraph orchestrator, RAG, DocGen). Build context is backend/.
+FROM node:22-slim
+
+# Puppeteer renders PDFs. The bundled Chromium download is skipped in favour of
+# the distribution's, so the build does not reach a Google CDN -- and so the
+# image still builds on a machine that has no route to one.
+ENV PUPPETEER_SKIP_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      chromium \
+      fonts-liberation \
+      ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY services/agent/package*.json ./services/agent/
+RUN cd services/agent && npm ci --omit=dev
+
+COPY services/agent ./services/agent
+COPY shared ./shared
+
+WORKDIR /app/services/agent
+
+# Written to at runtime, and mounted as volumes so neither survives only inside
+# the container. The audit log in particular has to outlive the process.
+RUN mkdir -p audit artifacts
+
+ENV NODE_ENV=production
+EXPOSE 8003
+
+CMD ["node", "index.js"]
