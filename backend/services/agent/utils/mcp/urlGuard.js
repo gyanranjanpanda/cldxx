@@ -112,12 +112,16 @@ export const assertHeadersSafe = (pairs = []) => {
 
   pairs.forEach((pair) => {
 
-    if (!/^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/.test(pair.key || "")) {
-      throw new Error(`Invalid header name: ${pair.key}`);
+    // Surrounding whitespace is not part of a header name; trim rather than
+    // refuse, so a row saved before the gateway started trimming still works.
+    const key = String(pair.key ?? "").trim();
+
+    if (!/^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/.test(key)) {
+      throw new Error(`Invalid header name: ${key}`);
     }
 
     if (/[\r\n\0]/.test(String(pair.value ?? ""))) {
-      throw new Error(`Invalid value for header ${pair.key}`);
+      throw new Error(`Invalid value for header ${key}`);
     }
 
   });

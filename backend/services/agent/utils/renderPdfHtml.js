@@ -1,3 +1,5 @@
+import { fontCss, prismCss, prismJs, mermaidJs } from "./localAssets.js";
+
 // ─── HTML renderer — converts validated DocumentSchema to a self-contained HTML ─
 // All text values are already HTML-escaped by the Zod schema (except code/diagram
 // which use rawString and are escaped here). TOC is built from actual section order.
@@ -105,7 +107,7 @@ function riskColor(likelihood, impact) {
 
 function buildCss(t) {
   return `
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+${fontCss()}
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -645,19 +647,12 @@ export function renderPdfHtml(doc) {
   <title>${doc.title}</title>
   <style>${buildCss(theme)}</style>
   ${hasCode ? `
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+  <style>${prismCss()}</style>
+  <script>${prismJs()}</script>
   ` : ""}
   ${hasDiagram ? `
-  <script type="module">
-    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  <script>${mermaidJs()}</script>
+  <script>
     mermaid.initialize({ startOnLoad: true, theme: 'base', themeVariables: { primaryColor: '#2563EB', primaryTextColor: '#1E293B', lineColor: '#64748B' } });
   </script>` : ""}
 </head>

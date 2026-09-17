@@ -12,8 +12,7 @@
  */
 
 import { generateDocument } from "../docgen/pipeline.js";
-import { uploadToS3 }       from "../utils/uploadToS3.js";
-import { getDownloadUrl }   from "../utils/getDownloadUrl.js";
+import { storeArtifact }     from "../utils/storage.js";
 import { checkAgentLimit }  from "../config/agentRateLimit.js";
 import { deductCredits }    from "../utils/deductCredits.js";
 
@@ -28,11 +27,11 @@ export const pptAgent = async (state) => {
       topic:  state.prompt,
       theme:  "professional",
       format: "pptx",
+      sovereign: state.sovereign === true,
     });
 
     const fileName = `ppt-${Date.now()}.pptx`;
-    await uploadToS3(buffer, fileName, PPTX_MIME);
-    const downloadUrl = await getDownloadUrl(fileName, 24 * 60 * 60);
+    const downloadUrl = await storeArtifact(buffer, fileName, PPTX_MIME, state);
 
     return {
       ...state,

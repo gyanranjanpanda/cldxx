@@ -34,6 +34,11 @@ export async function generateDocument(opts) {
     theme  = "professional",
     style  = "Professional",
     jobId  = `doc-${Date.now()}`,
+    // DocGen calls the model twice more after the agent has already resolved
+    // its zone, so the flag has to ride along. Without it the outline and every
+    // section would be written by a cloud model on a turn the user marked
+    // confidential.
+    sovereign = false,
   } = opts;
 
   const format = FORMAT_ALIASES[opts.format ?? "pdf"] ?? "pdf";
@@ -41,12 +46,12 @@ export async function generateDocument(opts) {
   const medium = format === "pptx" ? "pptx" : "pdf";
 
   // ── 1. Plan (layout-first) ──────────────────────────────────────────────
-  const outline = await plan(topic, { jobId, format: medium, style });
+  const outline = await plan(topic, { jobId, format: medium, style, sovereign });
 
   // ── 2. Write into those layouts ─────────────────────────────────────────
   const blocks = await writeAllSections(
     outline.sections,
-    { topic, style, format: medium },
+    { topic, style, format: medium, sovereign },
     jobId,
   );
 

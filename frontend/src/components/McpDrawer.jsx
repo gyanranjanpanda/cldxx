@@ -40,6 +40,14 @@ const draftFrom = (server) => ({
   enabled:   server.enabled
 });
 
+// Drop the empty rows the editor leaves behind, and trim the names: a header
+// pasted as "Authorization " is the same header, and sending the space earns a
+// validation error whose whitespace is invisible in the message.
+const cleanPairs = (pairs = []) =>
+  pairs
+    .map((pair) => ({ ...pair, key: pair.key.trim() }))
+    .filter((pair) => pair.key);
+
 const errorMessage = (error) =>
   error?.response?.data?.message || error?.message || "Something went wrong";
 
@@ -297,8 +305,8 @@ export default function McpDrawer({ open, onClose }) {
         command:   draft.command.trim(),
         // A shell-style arg string is what people paste; the API wants a list.
         args:      draft.args.trim() ? draft.args.trim().split(/\s+/) : [],
-        headers:   draft.headers.filter(p => p.key.trim()),
-        env:       draft.env.filter(p => p.key.trim()),
+        headers:   cleanPairs(draft.headers),
+        env:       cleanPairs(draft.env),
         enabled:   draft.enabled
       };
 

@@ -55,6 +55,13 @@ Annotation.Root({
  // Which MCP tools the answer ran. Undeclared keys are dropped by LangGraph,
  // so without this the chat agent's tool list never reaches the controller.
  toolCalls:
+ Annotation(),
+
+ // Sovereign Mode has to survive the trip through the graph: LangGraph drops
+ // keys that are not declared here, so without this line the flag set by the
+ // controller would arrive at the agents as undefined and every turn would
+ // quietly answer from the cloud.
+ sovereign:
  Annotation()
 
 });
