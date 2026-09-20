@@ -30,11 +30,33 @@ dotenv.config();
 const AGENT_SERVICE = process.env.AGENT_SERVICE || "http://127.0.0.1:8003";
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
+const allowedOrigins = new Set([
+  process.env.FRONTEND_URL,
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
+].filter(Boolean));
+
 const app = express();
 const port = Number(process.env.PORT) || 8000;
 
-app.use(cors({ origin: FRONTEND_URL, credentials: true }));
-app.use(helmet());
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.has(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error("CORS origin not allowed: " + origin));
+    },
+    credentials: true,
+  })
+);
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
 app.use(morgan("dev"));
 app.use(cookieParser());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
