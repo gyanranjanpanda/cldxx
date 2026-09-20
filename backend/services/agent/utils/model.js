@@ -1,9 +1,9 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+import { ChatDeepSeek } from "@langchain/deepseek";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatGroq } from "@langchain/groq";
-import { ChatOpenRouter } from "@langchain/openrouter";
 import { ChatOpenAI } from "@langchain/openai";
 
 import {
@@ -15,6 +15,24 @@ import {
 } from "./sovereign.js";
 
 import { audit } from "./audit.js";
+
+// DeepSeek serves every route that needs more than a short text reply: the
+// MCP loop, whose bound tool schemas are ~9k tokens of prompt before the
+// conversation starts (a free Groq key refuses that outright -- "Request too
+// large ... on tokens per minute (TPM): Limit 8000, Requested 9125"); coding,
+// where a whole generated project has to fit in one reply; and the document
+// and vision routes, which need to read an image. Plain chat does not need
+// any of that and stays on Groq, which is faster and cheaper.
+const deepseekConfigured = () => Boolean(process.env.DEEPSEEK_API_KEY);
+
+const deepseek = ({ maxTokens } = {}) =>
+  new ChatDeepSeek({
+    apiKey: process.env.DEEPSEEK_API_KEY,
+    model: process.env.DEEPSEEK_MODEL || "deepseek-chat",
+    temperature: 0,
+    maxRetries: 2,
+    ...(maxTokens ? { maxTokens } : {}),
+  });
 
 // `sovereign` is threaded in from the graph state rather than read from the
 // environment, because it is a property of the turn: the same deployment
@@ -97,14 +115,12 @@ export const getModel =
 
  switch (agent) {
    case "coding":
-     if (process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.startsWith("sk-or-")) {
-       return new ChatOpenRouter({
-         apiKey: process.env.OPENROUTER_API_KEY,
-         model: "deepseek/deepseek-chat",
-         temperature: 0,
+     if (deepseekConfigured()) {
+       return deepseek({
          maxTokens: Number(process.env.CODING_MAX_TOKENS) || 16000,
        });
      }
+
      // A whole project has to fit in one reply, and gpt-oss spends part of its
      // budget on reasoning tokens before it emits any code -- too small a cap
      // truncates the last file mid-function.
@@ -116,10 +132,19 @@ export const getModel =
        maxTokens: Number(process.env.CODING_MAX_TOKENS) || 16000,
      });
 
-   // PDF and PPT require reliable structured JSON output.
-   // Gemini 2.5 Flash follows JSON instructions very consistently.
+   // PDF and PPT require reliable structured JSON output. Gemini 2.5 Flash
+   // follows JSON instructions very consistently and stays the fallback here,
+   // so a DeepSeek outage degrades the document routes rather than ending them.
+   //
+   // pdf_rag answers questions about an uploaded document rather than writing
+   // one, but it is the same kind of work on the same kind of input -- and
+   // sovereign.js already groups all three under SOVEREIGN_DOC_MODEL, so
+   // leaving it out here sent it to the Groq default and split the two layers.
    case "pdf":
    case "ppt":
+   case "pdf_rag":
+     if (deepseekConfigured()) return deepseek();
+
      return new ChatGoogleGenerativeAI({
        model: "gemini-2.5-flash",
        apiKey: process.env.GOOGLE_API_KEY,
@@ -127,14 +152,30 @@ export const getModel =
      });
 
    case "vision":
+     if (deepseekConfigured()) return deepseek();
+
      return new ChatGoogleGenerativeAI({
        model: "gemini-2.5-flash",
        apiKey: process.env.GOOGLE_API_KEY,
      });
 
-   case "image":
-   case "search":
+   // Not an agent the router can pick: the chat agent asks for this one only
+   // once it knows the user has MCP tools to bind, so an ordinary chat turn is
+   // never charged DeepSeek's latency for tools it is not going to send.
+   case "mcp":
+     if (deepseekConfigured()) return deepseek();
+
+     return new ChatGroq({
+       apiKey: process.env.GROQ_API_KEY,
+       model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
+       temperature: 0,
+       maxRetries: 2,
+     });
+
+   // Chat is short text and the router classifies every single message, so
+   // both stay on the fast, cheap model.
    case "chat":
+   case "image":
    default:
      return new ChatGroq({
        apiKey: process.env.GROQ_API_KEY,

@@ -65,7 +65,7 @@ export async function plan(topic, opts = {}) {
   const { jobId = "", format = "pdf", style = "Professional", sovereign = false } = opts;
   bus.emit("planner.started", { jobId, topic, format });
 
-  const llm = getModel("pdf", { sovereign });
+  const llm = getModel(format === "pptx" ? "ppt" : "pdf", { sovereign });
   const response = await llm.invoke([
     { role: "system", content: systemPrompt(format) },
     { role: "user",   content: `Create an outline for: ${topic}\n\nTone: ${style}` },

@@ -1,6 +1,7 @@
 import { AIMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
 import { McpSession, fetchServers } from "./registry.js";
 import { selectServers } from "./intent.js";
+import { getModel } from "../model.js";
 import { newFence, untrustedContentRules, wrapUntrusted } from "../guardrails.js";
 
 // Each round trip is a full model call, so this caps cost and stops a server
@@ -25,7 +26,24 @@ const MAX_RESULT_CHARS = Number(process.env.MCP_MAX_RESULT_CHARS) || 8000;
 // spending 5k of it on tool definitions leaves a turn that cannot afford a
 // second one. 10k characters is ~2.5k tokens, which keeps the right tools
 // bound and still leaves room to hold a conversation.
-const MAX_SCHEMA_CHARS = Number(process.env.MCP_MAX_TOOL_SCHEMA_CHARS) || 10000;
+//
+// That ceiling belongs to Groq, not to MCP. Chat runs on DeepSeek whenever its
+// key is set, and DeepSeek holds the whole tool list without complaint --
+// trimming to Groq's limit there would hide tools the model could have used.
+const GROQ_SCHEMA_CHARS    = 10000;
+const DEFAULT_SCHEMA_CHARS = 60000;
+
+const budgetFor = (llm) => {
+
+  const override = Number(process.env.MCP_MAX_TOOL_SCHEMA_CHARS);
+
+  if (override) return override;
+
+  const provider = llm?._llmType?.() || llm?.constructor?.name || "";
+
+  return /groq/i.test(provider) ? GROQ_SCHEMA_CHARS : DEFAULT_SCHEMA_CHARS;
+
+};
 
 const lastUserText = (messages = []) => {
 
@@ -56,12 +74,12 @@ const lastUserText = (messages = []) => {
  * sends the same tool list twice -- an order that shuffles per request would
  * defeat prompt caching on providers that have it.
  */
-const fitToBudget = (specs, prompt) => {
+const fitToBudget = (specs, prompt, budget) => {
 
   const size  = (spec) => JSON.stringify(spec).length;
   const total = specs.reduce((sum, spec) => sum + size(spec), 0);
 
-  if (total <= MAX_SCHEMA_CHARS) return { specs, dropped: [] };
+  if (total <= budget) return { specs, dropped: [] };
 
   const words = String(prompt || "")
     .toLowerCase()
@@ -131,7 +149,7 @@ const fitToBudget = (specs, prompt) => {
 
   ranked.forEach((spec) => {
 
-    if (used + size(spec) <= MAX_SCHEMA_CHARS) {
+    if (used + size(spec) <= budget) {
       kept.push(spec);
       used += size(spec);
       return;
@@ -318,9 +336,13 @@ const readReply = (reply) => {
  * Falls back to a plain `llm.invoke` whenever the user has no usable tools, so
  * the common case costs one extra internal HTTP call and nothing else.
  *
+ * `llm` answers the turns with no tools in them. The tool loop runs on the
+ * "mcp" model instead, resolved only once there is something to bind: a plain
+ * chat turn should not pay for a model chosen to carry tool schemas.
+ *
  * @returns {{ response: string, toolCalls: Array, mcpErrors: Array }}
  */
-export const runWithMcpTools = async ({ llm, messages, userId }) => {
+export const runWithMcpTools = async ({ llm, messages, userId, state = {} }) => {
 
   let session = null;
 
@@ -343,12 +365,18 @@ export const runWithMcpTools = async ({ llm, messages, userId }) => {
 
     const { specs: discovered, errors } = await session.discover();
 
-    const { specs, dropped } = fitToBudget(discovered, prompt);
+    // Resolved here rather than by the caller so that it is built only on a
+    // turn that actually has tools, and so Sovereign Mode still decides it.
+    const toolLlm = getModel("mcp", state);
+
+    const budget = budgetFor(toolLlm);
+
+    const { specs, dropped } = fitToBudget(discovered, prompt, budget);
 
     if (dropped.length) {
 
       console.warn(
-        `[mcp] ${dropped.length} tool schema(s) left out to stay under ${MAX_SCHEMA_CHARS} chars`
+        `[mcp] ${dropped.length} tool schema(s) left out to stay under ${budget} chars`
       );
 
       errors.push({
@@ -363,7 +391,7 @@ export const runWithMcpTools = async ({ llm, messages, userId }) => {
       return { response: readReply(reply), toolCalls: [], mcpErrors: errors };
     }
 
-    const llmWithTools = llm.bindTools(specs);
+    const llmWithTools = toolLlm.bindTools(specs);
 
     // Placed after the agent's own system prompt so it reads as an addition to
     // it, not a competing first instruction.
