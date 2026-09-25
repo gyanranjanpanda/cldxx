@@ -20,6 +20,7 @@ import billingRouter from "./modules/billing/routes/billing.routes.js";
 import internalRouter from "./routes/internal.routes.js";
 import speechRouter from "./modules/speech/routes/speech.routes.js";
 import mcpRouter from "./modules/mcp/routes/mcp.routes.js";
+import keysRouter from "./modules/keys/routes/keys.routes.js";
 import inviteRouter from "./modules/invite/routes/invite.routes.js";
 import sharedRouter from "./modules/invite/routes/shared.routes.js";
 
@@ -75,6 +76,7 @@ app.use("/api/me", protect, getCurrentUser);
 app.use("/api/chat", protect, injectUser, json, chatRouter);
 app.use("/api/billing", protect, injectUser, json, billingRouter);
 app.use("/api/mcp", protect, injectUser, json, mcpRouter);
+app.use("/api/keys", protect, injectUser, json, keysRouter);
 app.use("/api/invites", protect, injectUser, json, inviteRouter);
 
 // Guests have no session by design, so this router is NOT behind `protect`.

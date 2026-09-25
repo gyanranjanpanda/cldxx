@@ -62,6 +62,13 @@ Annotation.Root({
  // controller would arrive at the agents as undefined and every turn would
  // quietly answer from the cloud.
  sovereign:
+ Annotation(),
+
+ // The user's own provider keys, resolved once per turn by the controller.
+ // Declared here for the same reason `sovereign` is: an annotation the graph
+ // does not know about is dropped, and every agent would fall back to the
+ // platform key without anything saying so.
+ keys:
  Annotation()
 
 });

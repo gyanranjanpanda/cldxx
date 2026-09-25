@@ -49,3 +49,7 @@ temp/
 # Sovereign Mode runtime output
 backend/services/agent/audit/
 backend/services/agent/artifacts/
+
+# Local OS metadata
+.metadata_never_index
+backend/services/shared

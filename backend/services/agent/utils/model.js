@@ -23,11 +23,26 @@ import { audit } from "./audit.js";
 // where a whole generated project has to fit in one reply; and the document
 // and vision routes, which need to read an image. Plain chat does not need
 // any of that and stays on Groq, which is faster and cheaper.
-const deepseekConfigured = () => Boolean(process.env.DEEPSEEK_API_KEY);
+// Bring your own key. A user who has pasted their own provider key pays that
+// provider directly, so their key is preferred over the platform's wherever a
+// cloud client is built. It is read from the turn's state rather than the
+// environment because it varies by user, not by deployment -- the same process
+// serves one request on the platform's key and the next on someone else's.
+const PLATFORM_ENV = {
+  groq:     "GROQ_API_KEY",
+  deepseek: "DEEPSEEK_API_KEY",
+  google:   "GOOGLE_API_KEY"
+};
 
-const deepseek = ({ maxTokens } = {}) =>
+const keyFor = (provider, state) =>
+  state?.keys?.[provider] || process.env[PLATFORM_ENV[provider]] || "";
+
+// True when *someone* can pay for DeepSeek on this turn -- the user or us.
+const deepseekConfigured = (state) => Boolean(keyFor("deepseek", state));
+
+const deepseek = (state, { maxTokens } = {}) =>
   new ChatDeepSeek({
-    apiKey: process.env.DEEPSEEK_API_KEY,
+    apiKey: keyFor("deepseek", state),
     model: process.env.DEEPSEEK_MODEL || "deepseek-chat",
     temperature: 0,
     maxRetries: 2,
@@ -115,8 +130,8 @@ export const getModel =
 
  switch (agent) {
    case "coding":
-     if (deepseekConfigured()) {
-       return deepseek({
+     if (deepseekConfigured(state)) {
+       return deepseek(state, {
          maxTokens: Number(process.env.CODING_MAX_TOKENS) || 16000,
        });
      }
@@ -125,7 +140,7 @@ export const getModel =
      // budget on reasoning tokens before it emits any code -- too small a cap
      // truncates the last file mid-function.
      return new ChatGroq({
-       apiKey: process.env.GROQ_API_KEY,
+       apiKey: keyFor("groq", state),
        model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
        temperature: 0,
        maxRetries: 2,
@@ -143,30 +158,30 @@ export const getModel =
    case "pdf":
    case "ppt":
    case "pdf_rag":
-     if (deepseekConfigured()) return deepseek();
+     if (deepseekConfigured(state)) return deepseek(state);
 
      return new ChatGoogleGenerativeAI({
        model: "gemini-2.5-flash",
-       apiKey: process.env.GOOGLE_API_KEY,
+       apiKey: keyFor("google", state),
        temperature: 0,
      });
 
    case "vision":
-     if (deepseekConfigured()) return deepseek();
+     if (deepseekConfigured(state)) return deepseek(state);
 
      return new ChatGoogleGenerativeAI({
        model: "gemini-2.5-flash",
-       apiKey: process.env.GOOGLE_API_KEY,
+       apiKey: keyFor("google", state),
      });
 
    // Not an agent the router can pick: the chat agent asks for this one only
    // once it knows the user has MCP tools to bind, so an ordinary chat turn is
    // never charged DeepSeek's latency for tools it is not going to send.
    case "mcp":
-     if (deepseekConfigured()) return deepseek();
+     if (deepseekConfigured(state)) return deepseek(state);
 
      return new ChatGroq({
-       apiKey: process.env.GROQ_API_KEY,
+       apiKey: keyFor("groq", state),
        model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
        temperature: 0,
        maxRetries: 2,
@@ -178,7 +193,7 @@ export const getModel =
    case "image":
    default:
      return new ChatGroq({
-       apiKey: process.env.GROQ_API_KEY,
+       apiKey: keyFor("groq", state),
        model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
        temperature: 0,
        maxRetries: 2,
