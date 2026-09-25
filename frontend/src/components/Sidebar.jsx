@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Plus, MessageSquare, LogOut, User, PenSquare, Menu, X,
-  CoinsIcon, Trash2, Check, Loader2, Search, ChevronDown, Sparkles, Ghost, Plug, Share2
+  CoinsIcon, Trash2, Check, Loader2, Search, ChevronDown, Sparkles, Ghost, Plug, Share2,
+  KeyRound
 } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import api from "../utils/axios";
@@ -13,6 +14,7 @@ import { setArtifacts, setMessages } from "../redux/message.slice";
 import { AGENTS } from "../constants/agents";
 import BillingDrawer from "./BillingDrawer";
 import McpDrawer from "./McpDrawer";
+import ApiKeysDrawer from "./ApiKeysDrawer";
 import ShareDialog from "./ShareDialog";
 import { getMcpServers } from "../features/mcp.api";
 
@@ -65,6 +67,7 @@ export default function Sidebar() {
   const [imageError, setImageError]     = useState(false);
   const [showBilling, setShowBilling]   = useState(false);
   const [showMcp, setShowMcp]           = useState(false);
+  const [showKeys, setShowKeys]         = useState(false);
   // Only the count is kept here; the drawer owns the full list.
   const [mcpEnabled, setMcpEnabled]     = useState(0);
   // Which conversation the share dialog is open for. Kept here rather than in
@@ -224,6 +227,14 @@ export default function Sidebar() {
           {mcpEnabled > 0 && (
             <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-indigo-400" />
           )}
+        </button>
+
+        <button
+          onClick={() => setShowKeys(true)}
+          title="Your API keys"
+          className="flex items-center justify-center w-9 h-9 rounded-xl text-slate-500 hover:text-slate-200 hover:bg-white/[0.05] transition-colors duration-150 bg-transparent border-none cursor-pointer"
+        >
+          <KeyRound size={16} />
         </button>
 
         <button
@@ -406,6 +417,11 @@ export default function Sidebar() {
               )}
             </button>
 
+            <button onClick={() => { setShowKeys(true); setMobileOpen(false); }} className={navRow(false)}>
+              <KeyRound size={15} className="shrink-0 text-slate-400" />
+              <span className="flex-1">API Keys</span>
+            </button>
+
             {/* Agents group — the composer's roster, mirrored as a nav tree */}
             <button onClick={() => setAgentsOpen(o => !o)} className={navRow(false)}>
               <Sparkles size={15} className="shrink-0 text-slate-400" />
@@ -575,6 +591,11 @@ export default function Sidebar() {
       </div>
 
       <BillingDrawer open={showBilling} onClose={() => setShowBilling(false)} />
+
+      <ApiKeysDrawer
+        open={showKeys}
+        onClose={() => setShowKeys(false)}
+      />
 
       <McpDrawer
         open={showMcp}

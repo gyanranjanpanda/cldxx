@@ -3,6 +3,7 @@ import { graph } from "../graph/supervisor.graph.js";
 import { addMessage, isEphemeral } from "../utils/memory.js";
 import { internalApi } from "../utils/internalApi.js"
 import { isSovereign } from "../utils/sovereign.js";
+import { fetchUserKeys } from "../utils/userKeys.js";
 
 export const chat =
 async(req,res,next)=>{
@@ -66,6 +67,16 @@ if(!isIncognito){
 
 
 
+  // Resolved once per turn rather than per model construction: getModel is
+  // synchronous, so the lookup cannot live inside it. Sovereign turns never
+  // reach a cloud provider, so there is no key to bring.
+  const keys =
+  isSovereignTurn
+  ? {}
+  : await fetchUserKeys(
+     req.headers["x-user-id"]
+    );
+
   const result =
   await graph.invoke({
 
@@ -80,7 +91,8 @@ if(!isIncognito){
    agent,
    timezone,
    file:req.file,
-   sovereign:isSovereignTurn
+   sovereign:isSovereignTurn,
+   keys
 
   });
 

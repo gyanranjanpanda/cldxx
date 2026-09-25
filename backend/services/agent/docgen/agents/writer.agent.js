@@ -151,7 +151,9 @@ export async function writeSection(spec, context, jobId = "") {
   const format = context.format ?? "pdf";
   const layout = getLayout(spec.layout);
   const budget = wordBudget(layout.id, format);
-  const llm    = getModel("pdf", { sovereign: context.sovereign === true });
+  const llm    = getModel(format === "pptx" ? "ppt" : "pdf", {
+    sovereign: context.sovereign === true,
+  });
 
   const userPrompt = `Section: ${spec.name}
 What it must establish: ${spec.description}

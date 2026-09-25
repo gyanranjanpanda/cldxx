@@ -200,7 +200,10 @@ Formatting:
  const { response, toolCalls, mcpErrors } = await runWithMcpTools({
    llm,
    messages,
-   userId: state.userId
+   userId: state.userId,
+   // Carried through so the tool loop's model is resolved under the same
+   // Sovereign Mode decision as the rest of the turn.
+   state
  });
 
  if (mcpErrors?.length) {
