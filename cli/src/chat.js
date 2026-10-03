@@ -27,10 +27,16 @@ const WITH_TOOLS = [
   "Never claim to have read a file you did not read with a tool."
 ].join(" ");
 
-export const newConversation = ({ toolsUsable = false } = {}) => [
+/**
+ * @param {object}  options
+ * @param {boolean} options.toolsUsable
+ * @param {string}  options.contract  tool descriptions, when the model takes
+ *                                    them in the prompt rather than the protocol
+ */
+export const newConversation = ({ toolsUsable = false, contract = "" } = {}) => [
   {
     role: "system",
-    content: `${IDENTITY} ${toolsUsable ? WITH_TOOLS : WITHOUT_TOOLS}`
+    content: `${IDENTITY} ${toolsUsable ? WITH_TOOLS : WITHOUT_TOOLS}${contract}`
   }
 ];
 

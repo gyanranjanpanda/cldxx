@@ -3,11 +3,15 @@
 A coding assistant that runs against a model on your own hardware. No prompt,
 no file, and no diff from your repository reaches a cloud provider.
 
-This is **steps 1–3 of 9** from [`../CLDX-CODE.md`](../CLDX-CODE.md): the
+This is **steps 1–3 and 6 of 9** from [`../CLDX-CODE.md`](../CLDX-CODE.md): the
 command, the zone decision, runtime discovery, the socket-level egress guard,
-and the tool-capability probe. It cannot read or edit files yet — that is
-`feat/cldx-code-file-tools`, which registers tools against the loop already
-shipped here.
+the tool-capability probe, and the execution strategies behind it. It cannot
+read or edit files yet — that is `feat/cldx-code-file-tools`, which registers
+tools against the loops already shipped here.
+
+Step 6 was pulled forward ahead of steps 4 and 5 because the probe found the
+local model is not native, so tools registered first would have been
+unreachable.
 
 ## Branch C — what your model can actually do
 
@@ -17,23 +21,42 @@ malformed JSON and burned GPU hours. So it is measured, once, with a single
 request — never inferred from the model's name, which lies: the same weights
 behave differently depending on whether the runtime ships a tool template.
 
-| Probe result | Mode | Tools |
+| Probe result | Mode | How tools run |
 |---|---|---|
-| a well-formed `tool_calls` entry | `native` | run through the OpenAI tools API |
-| a well-formed call emitted as *text* | `constrained` | step 6 — grammar-constrained decoding |
-| the tool named in prose, no parseable call | `react` | step 6 — tag parsing |
-| the tool ignored, or the runtime rejects `tools` | `read-only` | none |
+| a well-formed `tool_calls` entry | `native` | the OpenAI tools API |
+| a well-formed call emitted as *text* | `constrained` | text protocol + constrained retry |
+| the tool named in prose, no parseable call | `react` | text protocol, retry fires more often |
+| the tool ignored, or the runtime rejects `tools` | `read-only` | none — announced every session |
 
-Anything short of `native` degrades to read-only **and says so, every session**:
+Only `read-only` cannot run tools, and it says so with its evidence attached. A
+degraded mode that is announced is a product; a degraded mode that is silent is
+a bug report about the agent deleting a file.
 
-```
-cldx code 0.1.0   * Sovereign | qwen2.5-coder:7b | Ollama | constrained
-  ! qwen2.5-coder:7b cannot drive tools here -- running read-only.
-    probe: emitted a well-formed call as text instead of in tool_calls
-```
+### The text protocol
 
-A degraded mode that is announced is a product. A degraded mode that is silent
-is a bug report about the agent deleting a file.
+Measured here: Ollama serving `qwen2.5-coder:7b` returns `tool_calls: null` and
+puts a *perfectly formed call* in `content`. It knows what to say and not where
+to put it — which is the common case on local hardware, not an edge case.
+
+So tools are described in the prompt, and the reply is parsed rather than read
+out of a protocol field. The parser accepts every spelling seen in the wild
+(`tool`/`name`/`function.name`, fenced or bare, wrapped in a courtesy sentence),
+because refusing work the model actually did correctly wastes a generation that
+costs real seconds on a workstation.
+
+When the model *reaches* for a tool and produces invalid syntax, one retry fires
+with the runtime's constrained decoder — `format` on Ollama, `guided_json` on
+vLLM, `json_schema` on SGLang and llama.cpp, `response_format` for anything
+else. That is the highest-leverage idea here: it moves correctness from hoping
+for valid JSON to the sampler being unable to emit anything else.
+
+The retry never fires on a prose answer. Forcing JSON there would turn "here is
+your answer" into a spurious tool call.
+
+Tool results are fed back as a **user** turn, not a `tool` turn: a model with no
+`tool_calls` generally has no tool role in its chat template either, and some
+runtimes drop an unknown role silently — which looks exactly like the tool
+returning nothing.
 
 The system prompt is built from the measured mode, so a read-only session is
 told it has no filesystem. Without that it will describe files it has never
@@ -149,7 +172,7 @@ version of the leak this exists to prevent.
 npm test
 ```
 
-Thirty-six assertions, all of them about refusals, classification and loop
+Fifty-five assertions, all of them about refusals, classification and loop
 mechanics. They need no network and no running model — the probe and the tool
 loop are tested against a scripted OpenAI-shaped server on loopback, which is
 the only way to cover all four capability branches without four different GPUs.

@@ -326,6 +326,10 @@ code review catches.
    than a toy one.
 6. **Branch C fallbacks** — constrained decoding, then ReAct, then read-only. This is
    where small-model support is actually won.
+   *Built, and pulled ahead of steps 4–5: the probe found the local model is not
+   native, so tools registered first would have been unreachable. `cli/src/textloop.js`
+   plus `cli/src/constrain.js`. Verified end to end — `qwen2.5-coder:7b` drove a
+   tool call and answered from its result in one step, no retry needed.*
 7. **VS Code extension** — thin client over the socket. Status bar on day one.
 8. **Branch E approvals + shell/test tools** — the auto-repair loop from §5.5.
 9. **CODE-003/004/005 + the canary suite.** Ship nothing to a customer before step 9.

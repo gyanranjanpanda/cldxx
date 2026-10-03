@@ -20,14 +20,20 @@ export const MODES = {
   READ_ONLY: "read-only"
 };
 
-// Which modes can actually execute a tool today. The classifier recognises all
-// four; the executor for the middle two is step 6, and until it exists they
-// degrade to read-only *loudly*. A degraded mode that is announced is a
-// product; a degraded mode that is silent is a bug report about the agent
-// deleting someone's file.
-const EXECUTABLE = new Set([MODES.NATIVE]);
+// Which modes can execute a tool. Only read-only cannot, and it is the mode
+// reached when the model ignored the tool entirely or the runtime refused the
+// request -- there is nothing left to drive.
+//
+// native goes through the OpenAI tools API; constrained and react go through
+// the text protocol in textloop.js, which differ only in how often the
+// constrained retry has to fire.
+const EXECUTABLE = new Set([MODES.NATIVE, MODES.CONSTRAINED, MODES.REACT]);
 
 export const canExecuteTools = (mode) => EXECUTABLE.has(mode);
+
+// Whether tools travel in the protocol or in the prompt.
+export const usesTextProtocol = (mode) =>
+  mode === MODES.CONSTRAINED || mode === MODES.REACT;
 
 const PROBE_TOOL = {
   type: "function",

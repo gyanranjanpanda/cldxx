@@ -58,7 +58,10 @@ test("constrained: the call arrives as text", async (t) => {
   });
 
   assert.equal(result.mode, MODES.CONSTRAINED);
-  assert.equal(canExecuteTools(result.mode), false);
+
+  // Executable since step 6: the text protocol in textloop.js drives it. This
+  // assertion read `false` while only the native path existed.
+  assert.equal(canExecuteTools(result.mode), true);
 
 });
 
@@ -89,6 +92,10 @@ test("read-only: the tool is ignored", async (t) => {
   });
 
   assert.equal(result.mode, MODES.READ_ONLY);
+
+  // The only mode with nothing left to drive -- there is no strategy for a
+  // model that will not reach for a tool at all.
+  assert.equal(canExecuteTools(result.mode), false);
 
 });
 

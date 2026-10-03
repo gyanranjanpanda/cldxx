@@ -4,10 +4,11 @@
 // that would have to be undone to get there.
 
 import readline from "node:readline";
-import { canExecuteTools } from "./capability.js";
+import { canExecuteTools, usesTextProtocol } from "./capability.js";
 import { newConversation, streamCompletion } from "./chat.js";
+import { runTextToolLoop, toolInstructions } from "./textloop.js";
 import { runToolLoop } from "./tools.js";
-import { banner, bold, cyan, degradedNotice, dim, policyError } from "./ui.js";
+import { banner, bold, cyan, degradedNotice, dim, policyError, textModeNotice } from "./ui.js";
 
 const HELP = [
   "  /model <name>   switch model for the rest of the session",
@@ -19,15 +20,25 @@ const HELP = [
 
 export const runSession = async (context) => {
 
-  const toolsUsable = canExecuteTools(context.capability.mode);
-
-  // Step 3 registers no tools; step 4 fills this. The loop below already
-  // handles a populated list, so that change is additive rather than a rewrite.
+  // Step 4 registers the real tools; the loops below already handle a populated
+  // list, so that change is additive rather than a rewrite.
   const tools = context.tools ?? [];
+
+  const textProtocol = usesTextProtocol(context.capability.mode);
+  const toolsUsable = canExecuteTools(context.capability.mode) && tools.length > 0;
+
+  // Only the prompt-carried protocol needs the contract; a native model is told
+  // about its tools by the API itself, and repeating them in the prompt is
+  // tokens spent to say the same thing twice.
+  const contract = textProtocol && tools.length > 0 ? toolInstructions(tools) : "";
 
   process.stdout.write(banner(context));
 
-  if (!toolsUsable) process.stdout.write(degradedNotice(context));
+  if (!canExecuteTools(context.capability.mode)) {
+    process.stdout.write(degradedNotice(context));
+  } else if (textProtocol && tools.length > 0) {
+    process.stdout.write(textModeNotice(context));
+  }
 
   process.stdout.write(dim(`  /help for commands\n\n`));
 
@@ -37,7 +48,7 @@ export const runSession = async (context) => {
     prompt: bold("> ")
   });
 
-  let messages = newConversation({ toolsUsable });
+  let messages = newConversation({ toolsUsable, contract });
   let model = context.model;
 
   // ctrl-c cancels the answer being streamed; a second one at an empty prompt
@@ -77,7 +88,7 @@ export const runSession = async (context) => {
       if (command === "help") {
         process.stdout.write(`${HELP}\n\n`);
       } else if (command === "clear") {
-        messages = newConversation({ toolsUsable });
+        messages = newConversation({ toolsUsable, contract });
         process.stdout.write(dim("  conversation cleared\n\n"));
       } else if (command === "models") {
         process.stdout.write(
@@ -119,13 +130,16 @@ export const runSession = async (context) => {
       // streamed. A session with no usable tools skips that entirely and
       // streams from the first token, which is the common case on local
       // hardware and the one worth keeping fast.
-      if (toolsUsable && tools.length > 0) {
+      if (toolsUsable) {
 
-        const outcome = await runToolLoop(
+        const loop = textProtocol ? runTextToolLoop : runToolLoop;
+
+        const outcome = await loop(
           {
             baseUrl: context.baseUrl,
             apiKey: context.apiKey,
             model,
+            runtime: context.runtime,
             timeoutMs: context.timeoutMs,
             signal: streaming.signal
           },
@@ -133,7 +147,9 @@ export const runSession = async (context) => {
           tools,
           {
             onToolCall: (call) =>
-              process.stdout.write(dim(`  . ${call.function?.name}\n`))
+              process.stdout.write(dim(`  . ${call.function?.name}\n`)),
+            onRetry: () =>
+              process.stdout.write(dim(`  . retrying with constrained decoding\n`))
           }
         );
 
@@ -199,10 +215,41 @@ export const runSession = async (context) => {
  */
 export const runOnce = async (context, prompt) => {
 
+  const tools = context.tools ?? [];
+
+  const toolsUsable = canExecuteTools(context.capability.mode) && tools.length > 0;
+
+  const contract =
+    usesTextProtocol(context.capability.mode) && tools.length > 0
+      ? toolInstructions(tools)
+      : "";
+
   const messages = [
-    ...newConversation({ toolsUsable: canExecuteTools(context.capability.mode) }),
+    ...newConversation({ toolsUsable, contract }),
     { role: "user", content: prompt }
   ];
+
+  if (toolsUsable) {
+
+    const loop = usesTextProtocol(context.capability.mode) ? runTextToolLoop : runToolLoop;
+
+    const outcome = await loop(
+      {
+        baseUrl: context.baseUrl,
+        apiKey: context.apiKey,
+        model: context.model,
+        runtime: context.runtime,
+        timeoutMs: context.timeoutMs
+      },
+      messages,
+      tools
+    );
+
+    process.stdout.write(`${outcome.content}\n`);
+
+    return;
+
+  }
 
   for await (const delta of streamCompletion({
     baseUrl: context.baseUrl,

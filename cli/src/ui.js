@@ -45,6 +45,11 @@ export const banner = ({ zone, model, runtime, root, cached, version, capability
  * explicit about this: a degraded mode that is announced is a product, a
  * degraded mode that is silent is a bug report about the agent deleting a file.
  */
+export const textModeNotice = ({ capability }) => [
+  dim(`  tools run through the text protocol (${capability.mode}): ${capability.evidence}.`),
+  ""
+].join("\n");
+
 export const degradedNotice = ({ model, capability }) => [
   yellow(`  ! ${model} cannot drive tools here -- running read-only.`),
   dim(`    probe: ${capability.evidence}`),
