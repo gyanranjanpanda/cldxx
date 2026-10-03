@@ -80,7 +80,7 @@ export const runTool = async (tools, call) => {
 
 };
 
-const complete = async ({ baseUrl, apiKey, model, messages, tools, timeoutMs, signal }) => {
+const complete = async ({ baseUrl, apiKey, model, messages, tools, timeoutMs, signal, toolTemperature }) => {
 
   const controller = new AbortController();
   const abort = () => controller.abort();
@@ -107,7 +107,8 @@ const complete = async ({ baseUrl, apiKey, model, messages, tools, timeoutMs, si
         model,
         stream: false,
         messages,
-        tools: toolSchema(tools)
+        tools: toolSchema(tools),
+        temperature: toolTemperature
       })
     });
 

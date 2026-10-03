@@ -19,7 +19,15 @@ const DEFAULTS = {
   baseUrl: "",
   model: "",
   apiKey: "not-needed",
-  timeoutMs: 120000
+  timeoutMs: 120000,
+
+  // Tool-driving turns are decoded near-greedily. Ollama defaults to 0.8, which
+  // is a reasonable setting for prose and a poor one for deciding which tool to
+  // call and reading a value back out of its output: measured over repeated
+  // runs, the same question answered correctly about two times in three, with
+  // the failure being the model claiming a value was absent from text it had
+  // just been handed. Creativity is not the useful axis here.
+  toolTemperature: 0.1
 };
 
 // Local runtimes ignore the key but the OpenAI wire format expects one, the

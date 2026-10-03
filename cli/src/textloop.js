@@ -199,7 +199,8 @@ export const runTextToolLoop = async (context, messages, tools, { onToolCall, on
     let content = await complete(context, {
       model: context.model,
       stream: false,
-      messages
+      messages,
+      temperature: context.toolTemperature
     });
 
     if (content === null) return { content: "", steps: step, exhausted: false, retries };
@@ -224,6 +225,7 @@ export const runTextToolLoop = async (context, messages, tools, { onToolCall, on
               "That was not a valid tool call. Reply with only the JSON object for the tool you intended to use."
           }
         ],
+        temperature: context.toolTemperature,
         ...constraintFor(context.runtime, toolCallSchema(tools))
       });
 

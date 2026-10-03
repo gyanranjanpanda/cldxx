@@ -3,15 +3,34 @@
 A coding assistant that runs against a model on your own hardware. No prompt,
 no file, and no diff from your repository reaches a cloud provider.
 
-This is **steps 1–3 and 6 of 9** from [`../CLDX-CODE.md`](../CLDX-CODE.md): the
+This is **steps 1–4 and 6 of 9** from [`../CLDX-CODE.md`](../CLDX-CODE.md): the
 command, the zone decision, runtime discovery, the socket-level egress guard,
-the tool-capability probe, and the execution strategies behind it. It cannot
-read or edit files yet — that is `feat/cldx-code-file-tools`, which registers
-tools against the loops already shipped here.
+the tool-capability probe, the execution strategies behind it, and the file
+tools. It reads, searches and proposes edits against a real repository.
 
-Step 6 was pulled forward ahead of steps 4 and 5 because the probe found the
-local model is not native, so tools registered first would have been
-unreachable.
+Step 6 was pulled ahead of 4 because the probe found the local model is not
+native, so tools registered first would have been unreachable.
+
+## Tools
+
+| Tool | What it does |
+|---|---|
+| `read_file` | contents with line numbers, optional line range |
+| `list_files` | the tree, minus build/dependency/VCS directories |
+| `grep` | regex search, file:line results |
+| `edit_file` | exact-string replacement — **proposes a diff, writes nothing** without `--auto-edit` |
+
+```
+$ cldx code -p "Use grep to find which file defines CLOUD_ONLY_AGENTS,
+                then read it and tell me which agents are in that set."
+The agents in the `CLOUD_ONLY_AGENTS` set are `image` and `search`.
+```
+
+That is a 7B model chaining two tools and answering from what it read.
+
+`edit_file` refuses an ambiguous replacement rather than taking the first
+match. "The first one" is a guess, and a guess that edits the wrong call site is
+the most expensive mistake this tool can make.
 
 ## Branch C — what your model can actually do
 
@@ -115,6 +134,8 @@ interrupts the answer being streamed; again at an empty prompt exits.
 | `CODE-002` | the local runtime is unreachable — the turn dies, it does not fall back |
 | `CODE-001` | *any* socket in the session tries to reach a non-loopback host |
 | `CODE-006` | `--cloud` in a repository classified `restricted` or above |
+| `CODE-007` | a tool is given a path outside the workspace — including via symlink |
+| `CODE-008` | a tool is given a path that looks like a secret |
 
 `CODE-002` is the one worth understanding. A local runtime being down is not a
 reason to answer from somewhere else: that fallback fires during an outage, when
@@ -172,7 +193,7 @@ version of the leak this exists to prevent.
 npm test
 ```
 
-Fifty-five assertions, all of them about refusals, classification and loop
+Seventy-two assertions, all of them about refusals, classification and loop
 mechanics. They need no network and no running model — the probe and the tool
 loop are tested against a scripted OpenAI-shaped server on loopback, which is
 the only way to cover all four capability branches without four different GPUs.

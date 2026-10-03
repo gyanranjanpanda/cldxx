@@ -15,6 +15,7 @@ import { canExecuteTools, resolveCapability } from "../src/capability.js";
 import { loadConfig } from "../src/config.js";
 import { armEgressGuard, egressLog } from "../src/egress.js";
 import { discoverRuntime } from "../src/discovery.js";
+import { createFileTools } from "../src/filetools.js";
 import { PolicyDenied } from "../src/policy.js";
 import { runOnce, runSession } from "../src/session.js";
 import { policyError } from "../src/ui.js";
@@ -32,6 +33,8 @@ cldx code -- sovereign coding assistant
 Options
   --cloud              run this session in Cloud Mode (refused for
                        repositories classified restricted or above)
+  --auto-edit          let edit_file write to disk. Without it, edits are
+                       proposed as diffs and nothing is written.
   --model <name>       use a specific model instead of the chosen default
   --base-url <url>     use a specific runtime instead of discovering one
   --reprobe            ignore .cldx/runtime.json and probe again
@@ -51,6 +54,7 @@ const parseArgs = (argv) => {
 
     switch (argument) {
       case "--cloud":      flags.cloud = true; break;
+      case "--auto-edit":  flags.autoEdit = true; break;
       case "--reprobe":    flags.reprobe = true; break;
       case "--doctor":     flags.doctor = true; break;
       case "-h":
@@ -144,10 +148,17 @@ const main = async () => {
     { reprobe: flags.reprobe }
   );
 
+  // Edits are proposed, not applied, unless asked for. The spec puts edit last
+  // and behind --plan "until the diff quality is trusted", and on a model that
+  // reaches tools through a text protocol that trust has to be earned per
+  // deployment rather than assumed once.
+  const tools = createFileTools(root, { allowEdits: Boolean(flags.autoEdit) });
+
   const context = {
     root,
     zone,
     capability,
+    tools,
     baseUrl: runtime.baseUrl,
     runtime: runtime.runtime,
     models: runtime.models,
@@ -155,6 +166,7 @@ const main = async () => {
     cached: runtime.cached,
     apiKey: config.apiKey,
     timeoutMs: config.timeoutMs,
+    toolTemperature: config.toolTemperature,
     version: await version()
   };
 
@@ -165,6 +177,8 @@ const main = async () => {
         zone: { ...zone },
         egressGuard: zone.sovereign ? "armed" : "not armed (cloud session)",
         toolsExecutable: canExecuteTools(capability.mode),
+        tools: tools.map((tool) => tool.name),
+        editsApply: Boolean(flags.autoEdit),
         connections: egressLog()
       },
       null,

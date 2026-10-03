@@ -206,6 +206,8 @@ posture.
 | **CODE-004** | shell command is outside the allowlist under `--auto` | Prevents `curl`-shaped exfiltration authored by the model itself. |
 | **CODE-005** | telemetry, crash reporting, or update check during a sovereign session | A stack trace carries file paths and often source lines. Disabled entirely — including the VS Code extension's own reporter. |
 | **CODE-006** | `--cloud` is passed in a repository classified `restricted` or above | Branch A's refusal. `.cldx/config.json` is committed, so classification travels with the code; a flag typed in a hurry must not outrank it, or the classification is advice rather than policy. |
+| **CODE-007** | a tool is handed a path that resolves outside the workspace | Paths reach the model from stack traces, READMEs and users, any of which can say `..`. Symlinks are resolved *before* the check — a link inside the repo pointing at `~/.ssh` satisfies every string comparison there is. |
+| **CODE-008** | a tool is handed a path that looks like a secret (`.env`, `*.pem`, `id_rsa`, …) | The model is local, so this is not an egress event — but a secret read into context lands in the session transcript, in any summary built from it, and in whatever the developer pastes elsewhere. Cheap to refuse, expensive to regret. |
 
 Audit entries record `sha256(path)` and `sha256(diff)`, never the path or the diff. An
 auditor can prove *which* file a session touched by hashing a candidate; the log alone
@@ -322,6 +324,10 @@ code review catches.
    model, because no model on hand exhibits it.*
 4. **Tools: read, grep, edit** — in that order. Edit last, behind `--plan` until the diff
    quality is trusted.
+   *Built — `cli/src/filetools.js` plus `cli/src/paths.js`, with `list_files` added because
+   a model that cannot enumerate a repository guesses at paths. Edits propose a diff and
+   write nothing without `--auto-edit`. Verified: `qwen2.5-coder:7b` chains grep → read →
+   answer correctly against this repository.*
 5. **Branch D: repo map + budget** — the step that makes it usable on a real repo rather
    than a toy one.
 6. **Branch C fallbacks** — constrained decoding, then ReAct, then read-only. This is

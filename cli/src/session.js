@@ -141,6 +141,7 @@ export const runSession = async (context) => {
             model,
             runtime: context.runtime,
             timeoutMs: context.timeoutMs,
+            toolTemperature: context.toolTemperature,
             signal: streaming.signal
           },
           messages,
@@ -239,7 +240,8 @@ export const runOnce = async (context, prompt) => {
         apiKey: context.apiKey,
         model: context.model,
         runtime: context.runtime,
-        timeoutMs: context.timeoutMs
+        timeoutMs: context.timeoutMs,
+        toolTemperature: context.toolTemperature
       },
       messages,
       tools
