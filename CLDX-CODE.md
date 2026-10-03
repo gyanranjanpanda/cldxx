@@ -205,6 +205,7 @@ posture.
 | **CODE-003** | an MCP server with `transport: "http"` is configured | Tool arguments in a coding agent *are source code*. This is SOV-003's open question (`sovirgn.md`, Leak 3) answered for the case where it bites hardest: stdio only. |
 | **CODE-004** | shell command is outside the allowlist under `--auto` | Prevents `curl`-shaped exfiltration authored by the model itself. |
 | **CODE-005** | telemetry, crash reporting, or update check during a sovereign session | A stack trace carries file paths and often source lines. Disabled entirely — including the VS Code extension's own reporter. |
+| **CODE-006** | `--cloud` is passed in a repository classified `restricted` or above | Branch A's refusal. `.cldx/config.json` is committed, so classification travels with the code; a flag typed in a hurry must not outrank it, or the classification is advice rather than policy. |
 
 Audit entries record `sha256(path)` and `sha256(diff)`, never the path or the diff. An
 auditor can prove *which* file a session touched by hashing a candidate; the log alone
@@ -307,6 +308,7 @@ code review catches.
 
 1. **CLI skeleton + Branch A/B** — `cldx code` discovers a local runtime and streams a
    plain completion. No tools yet. Proves the zero-config promise.
+   *Built — `cli/`, zero dependencies, `npm test` covers the refusals.*
 2. **The socket interceptor and CODE-001/002** — before any tool exists. Build the cage
    first; retrofitting egress control onto a working agent never finishes.
 3. **Branch C probe + native path** — tools working on a model that supports them.

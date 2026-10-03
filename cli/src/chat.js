@@ -1,0 +1,118 @@
+// Streaming completions over the OpenAI wire format, with no SDK.
+//
+// Zero dependencies is a feature here, not minimalism for its own sake: this
+// package has to install on an air-gapped workstation from a mirror or a USB
+// stick, and every dependency is one more thing to vendor and one more thing
+// that could open a socket of its own.
+
+import { localRuntimeUnreachable } from "./policy.js";
+
+const SYSTEM_PROMPT = [
+  "You are cldx code, a coding assistant running on the developer's own hardware.",
+  "Answer concretely and briefly. Prefer showing code over describing it.",
+  "You cannot read or edit files yet -- if the developer asks you to, say so plainly",
+  "and answer from what they have pasted instead of guessing at file contents."
+].join(" ");
+
+export const newConversation = () => [
+  { role: "system", content: SYSTEM_PROMPT }
+];
+
+/**
+ * Yields text deltas as they arrive.
+ *
+ * Any transport failure becomes CODE-002. That mapping is the whole point: the
+ * caller is given something it can only report, never something it could
+ * plausibly retry against a different provider.
+ */
+export async function* streamCompletion({ baseUrl, apiKey, model, messages, signal, timeoutMs }) {
+
+  const controller = new AbortController();
+
+  const abort = () => controller.abort();
+  signal?.addEventListener("abort", abort, { once: true });
+
+  const timer = setTimeout(abort, timeoutMs);
+
+  let response;
+
+  try {
+
+    response = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({ model, messages, stream: true })
+    });
+
+  } catch (error) {
+
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", abort);
+
+    // A user pressing ctrl-c is not a policy event.
+    if (signal?.aborted) return;
+
+    throw localRuntimeUnreachable(baseUrl, error.message);
+
+  }
+
+  try {
+
+    if (!response.ok) {
+
+      const detail = (await response.text()).slice(0, 400);
+
+      throw localRuntimeUnreachable(baseUrl, `HTTP ${response.status} ${detail}`);
+
+    }
+
+    // SSE frames are separated by a blank line and can split across chunks, so
+    // the tail of a chunk is carried forward rather than parsed as it stands.
+    let buffer = "";
+
+    for await (const chunk of response.body) {
+
+      buffer += Buffer.from(chunk).toString("utf8");
+
+      const frames = buffer.split("\n\n");
+      buffer = frames.pop() ?? "";
+
+      for (const frame of frames) {
+
+        for (const line of frame.split("\n")) {
+
+          if (!line.startsWith("data:")) continue;
+
+          const payload = line.slice(5).trim();
+
+          if (payload === "[DONE]") return;
+
+          try {
+
+            const delta = JSON.parse(payload)?.choices?.[0]?.delta?.content;
+
+            if (delta) yield delta;
+
+          } catch {
+            // A frame that is not JSON is a runtime quirk, not a reason to lose
+            // the rest of a working stream.
+          }
+
+        }
+
+      }
+
+    }
+
+  } finally {
+
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", abort);
+
+  }
+
+}

@@ -53,3 +53,6 @@ backend/services/agent/artifacts/
 # Local OS metadata
 .metadata_never_index
 backend/services/shared
+
+# cldx code -- session state and probe cache. Contains source; never commit.
+.cldx/

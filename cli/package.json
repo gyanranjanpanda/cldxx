@@ -1,0 +1,21 @@
+{
+  "name": "@cldx/code",
+  "version": "0.1.0",
+  "description": "Sovereign agentic coding assistant. Runs against a model on your own hardware.",
+  "type": "module",
+  "license": "ISC",
+  "bin": {
+    "cldx": "./bin/cldx.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md"
+  ]
+}
