@@ -9,10 +9,15 @@ export const getConversations =async()=>{
  return response.data;
 
 };
-export const updateConversations =async(conversationId,title)=>{
+// The zone travels with the call because a title is content: it is the first
+// thing the person typed. Without it the server cannot tell a sovereign thread
+// from an ordinary one, and the real title lands in the cloud database.
+// The server clamps this against the organisation's policy -- a client can ask
+// for Sovereign Mode, it cannot ask its way out of it.
+export const updateConversations =async(conversationId,title,sovereign=false)=>{
 
  const response =await api.post( "/api/chat/update-conversation",{
-    conversationId,title
+    conversationId,title,sovereign
  }
  );
 
@@ -20,9 +25,9 @@ export const updateConversations =async(conversationId,title)=>{
 
 };
 
-export const createConversation =async()=>{
+export const createConversation =async(sovereign=false)=>{
 
- const response =await api.post("/api/chat/create-conversation",{});
+ const response =await api.post("/api/chat/create-conversation",{ sovereign });
 
  return response.data;
 

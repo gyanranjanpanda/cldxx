@@ -23,10 +23,23 @@ export const proxyWithUser =
     }
 
     // A client-supplied identity header must never survive the proxy; the
-    // values below are the only ones the agent may see.
+    // values below are the only ones the agent may see. The policy header is
+    // in this list for the same reason and a stronger one -- a client that
+    // could set its own sovereign policy would be setting its own security
+    // classification.
     delete proxyReqOpts.headers["x-user-id"];
     delete proxyReqOpts.headers["x-user-email"];
     delete proxyReqOpts.headers["x-user-avatar"];
+    delete proxyReqOpts.headers["x-sovereign-policy"];
+
+    if(srcReq.sovereignPolicy){
+
+      proxyReqOpts.headers[
+       "x-sovereign-policy"
+      ] =
+      srcReq.sovereignPolicy;
+
+    }
 
     if(srcReq.user){
 

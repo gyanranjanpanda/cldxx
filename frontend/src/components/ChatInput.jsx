@@ -259,14 +259,14 @@ const toggleMic = () => {
         let conversation = selectedConversation;
 
         if (!conversation) {
-          const newConversation = await createConversation();
+          const newConversation = await createConversation(Boolean(sovereign));
           dispatch(addConversation(newConversation));
           dispatch(setSelectedConversation(newConversation));
           conversation = newConversation;
         }
 
         if (conversation.title === "New Chat") {
-          await updateConversations(conversation._id, title);
+          await updateConversations(conversation._id, title, Boolean(sovereign));
           dispatch(setConvTitle({ conversationId: conversation._id, title }));
         }
 

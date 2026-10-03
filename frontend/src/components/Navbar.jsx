@@ -49,10 +49,11 @@ export default function Navbar() {
           title={sovereign
             ? "Sovereign Mode on — answered by your own models, nothing leaves your infrastructure"
             : "Sovereign Mode off — this chat uses cloud models"}
+          style={{ backgroundColor: '#0B0F19' }}
           className={`flex items-center gap-1.5 text-[12px] font-medium px-2.5 h-[30px] rounded-lg border cursor-pointer transition-colors duration-150
             ${sovereign
-              ? "text-emerald-300 bg-emerald-500/10 border-emerald-500/25 hover:bg-emerald-500/15"
-              : "text-slate-300 bg-white/[0.05] border-white/[0.08] hover:bg-white/[0.09]"}`}
+              ? "text-emerald-300 border-emerald-500/25"
+              : "text-slate-300 border-white/[0.08]"}`}
         >
           <ShieldCheck size={13} />
           Sovereign

@@ -10,6 +10,7 @@ import { fileURLToPath } from "url";
 import connectDB from "./config/db.js";
 import { protect } from "./middlewares/auth.middleware.js";
 import { injectUser } from "./middlewares/injectUser.js";
+import { withSovereignPolicy } from "./utils/sovereignPolicy.js";
 import { requireInternalKey } from "./middlewares/internal.middleware.js";
 import { getCurrentUser } from "./controllers/user.controller.js";
 import { proxyWithUser } from "./utils/proxyWithHeaders.js";
@@ -73,7 +74,7 @@ app.get("/", (req, res) => {
 
 app.use("/api/auth", json, authRouter);
 app.use("/api/me", protect, getCurrentUser);
-app.use("/api/chat", protect, injectUser, json, chatRouter);
+app.use("/api/chat", protect, injectUser, withSovereignPolicy, json, chatRouter);
 app.use("/api/billing", protect, injectUser, json, billingRouter);
 app.use("/api/mcp", protect, injectUser, json, mcpRouter);
 app.use("/api/keys", protect, injectUser, json, keysRouter);
@@ -89,7 +90,18 @@ app.use("/api/speech", protect, speechRouter);
 
 // Agent stays a separate process: puppeteer, langchain and the exporters have a
 // different memory/CPU profile and much slower deploys than the CRUD above.
-app.use("/api/agent", protect, proxyWithUser(AGENT_SERVICE));
+app.use("/api/agent", protect, withSovereignPolicy, proxyWithUser(AGENT_SERVICE));
+
+// Sovereign artefacts are written to the agent's local disk instead of S3, so
+// the agent serves them -- but in a sealed deployment the agent is on a network
+// with no route to a browser, and it is the gateway that staff can reach. So the
+// download comes through here.
+//
+// `protect` is the point: a browser following a download link cannot attach the
+// internal identity header, but it does send its cookie to this origin, so the
+// link's unguessability stops being the only control. The agent then checks the
+// artefact belongs to the user this proxy names.
+app.use("/artifacts", protect, proxyWithUser(AGENT_SERVICE));
 
 app.use("/internal", requireInternalKey, json, internalRouter);
 

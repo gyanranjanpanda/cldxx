@@ -2,6 +2,7 @@ import { AIMessage, SystemMessage, ToolMessage } from "@langchain/core/messages"
 import { McpSession, fetchServers } from "./registry.js";
 import { selectServers } from "./intent.js";
 import { getModel } from "../model.js";
+import { audit } from "../audit.js";
 import { newFence, untrustedContentRules, wrapUntrusted } from "../guardrails.js";
 
 // Each round trip is a full model call, so this caps cost and stops a server
@@ -357,13 +358,66 @@ export const runWithMcpTools = async ({ llm, messages, userId, state = {} }) => 
 
     const prompt = lastUserText(messages);
 
+    // A "local" model is not a local turn if a tool ships the prompt out. A
+    // remote MCP server receives whatever arguments the model passes it, so in
+    // Sovereign Mode only servers that run as a local process are usable --
+    // the same reasoning that refuses the search and image agents.
+    //
+    // Note this bounds the damage rather than ending it: a stdio server is a
+    // program on the host and can open its own sockets. Network-level egress
+    // control is what actually closes that, and this check is the layer above.
+    const usable =
+      state?.sovereign === true
+        ? available.filter((server) => server.transport === "stdio")
+        : available;
+
+    const refused = available.length - usable.length;
+
+    if (refused > 0) {
+
+      console.warn(`[mcp] ${refused} remote server(s) refused in Sovereign Mode`);
+
+      audit({
+        userId:         userId,
+        conversationId: state?.conversationId,
+        agent:          "mcp",
+        zone:           "SOVEREIGN",
+        decision:       "REFUSE",
+        rule:           "SOV-005",
+        model:          null,
+        endpoint:       "remote mcp transport"
+      });
+
+    }
+
+    if (!usable.length) {
+      const reply = await llm.invoke(messages);
+      return {
+        response: readReply(reply),
+        toolCalls: [],
+        mcpErrors: refused
+          ? [{
+              server: "mcp",
+              error: `${refused} server(s) need a network connection, so they are unavailable in Sovereign Mode. Local (stdio) servers still work.`
+            }]
+          : []
+      };
+    }
+
     // Naming a server also narrows what gets connected, so an unnamed server's
     // process is never spawned and its tools are never paid for this turn.
-    const servers = selectServers(prompt, available);
+    const servers = selectServers(prompt, usable);
 
     session = new McpSession(servers, { stdioAllowed });
 
     const { specs: discovered, errors } = await session.discover();
+
+    if (refused > 0) {
+      errors.push({
+        server: "mcp",
+        error: `${refused} server(s) need a network connection, so they are unavailable in Sovereign Mode. Local (stdio) servers still work.`
+      });
+    }
 
     // Resolved here rather than by the caller so that it is built only on a
     // turn that actually has tools, and so Sovereign Mode still decides it.
@@ -458,6 +512,12 @@ export const runWithMcpTools = async ({ llm, messages, userId, state = {} }) => 
     };
 
   } catch (error) {
+
+    // A policy refusal is not an MCP failure either, and it is the one error
+    // that must never be downgraded: SOV-001 and friends exist to stop a turn,
+    // and catching them here would answer the turn anyway on whichever model
+    // the caller happened to pass in. Fail closed means closed.
+    if (error?.isPolicyDenial) throw error;
 
     // A provider failure is not an MCP failure. Answering anyway produces a
     // confident "I cannot see your files" from a model that had a file tool

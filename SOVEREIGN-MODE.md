@@ -55,16 +55,32 @@ switch (agent) { /* Groq / DeepSeek / Gemini */ }
 The sovereign branch **returns before the cloud switch is reachable**. That ordering is
 the actual enforcement — not a flag checked inside each provider.
 
-### The three fail-closed rules
+### The fail-closed rules
 
 | Rule | Where | Fires when | Why it refuses instead of falling back |
 |---|---|---|---|
 | **SOV-001** | `sovereign.js:90` `assertSovereignReady` | `SOVEREIGN_BASE_URL` unset | A fallback to cloud "because local was down" fires during an outage, when nobody is reading logs. That is how local-only products leak. |
 | **SOV-002** | `sovereign.js:104` `assertAgentAllowed` | agent ∈ `CLOUD_ONLY_AGENTS` = `{image, search}` | Image generation is a Gemini call, search is a Tavily call. Sending the prompt to Tavily to "just do the search" is the exact leak the mode exists to prevent. |
 | **SOV-003** | `embedding.js:88` `getEmbeddings` | sovereign + no local embedder | **The leak nobody notices.** A confidential PDF embedded against `gemini-embedding-001` has already left the building, and no LLM was ever called. |
+| **SOV-004** | `storage.js` `storeArtifact` | sovereign artefact write | A locally-generated report holds the same content as the prompt. Uploading the finished PDF to S3 would leak the document at the last step, after every other control did its job. |
+| **SOV-005** | `mcp/runTools.js` | sovereign + non-stdio MCP transport | An HTTP MCP server is a third party with the tool arguments in hand. Only a process on this host can be reasoned about. |
+| **SOV-006** | `sovereign.js` `assertModelCapable` | vision turn, text-only local model | Without this, "the local model cannot see images" quietly becomes "so we used Gemini". |
+| **SOV-008** | `provenance.js` `assertModelIntegrity` | pinned digest != the weights being served | A tag can be repointed at different weights without the tag changing, so "we ran qwen2.5-coder:7b" is an assertion until something checks it. |
 
-All three throw `PolicyDenied` carrying a rule id, so an audit can reconstruct *why* a
+All of them throw `PolicyDenied` carrying a rule id, so an audit can reconstruct *why* a
 request was refused months later without retaining the prompt.
+
+**SOV-007** is the egress rule and is deliberately not in this table: it is not enforced
+by application code at all. It is the container having no route off its network, which is
+the only control here that does not depend on this codebase being correct.
+
+### What the audit log records
+
+Every entry carries `modelDigest` alongside `model` -- the digest of the weights that
+actually answered, read from the runtime at startup. Without a pin that is provenance;
+with `SOVEREIGN_MODEL_DIGESTS` set it is enforcement, and a substituted model is refused
+before the client is built rather than discovered in the log afterwards. A runtime that
+publishes no digest is recorded as `unverified` rather than as fine.
 
 ### Which model answers
 
