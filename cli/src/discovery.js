@@ -6,6 +6,7 @@
 // of them is already running.
 
 import path from "node:path";
+import { policyDenialWithin } from "./egress.js";
 import { assertLoopback, localRuntimeUnreachable, PolicyDenied } from "./policy.js";
 import { cldxDir, readJson, writeJson } from "./workspace.js";
 
@@ -62,8 +63,18 @@ export const probe = async (baseUrl) => {
 
     return { baseUrl, models };
 
-  } catch {
+  } catch (error) {
+
+    // "Nothing is listening here" is an ordinary discovery outcome and returns
+    // null. A policy refusal is not an outcome -- swallowing it would turn a
+    // blocked connection into a silent "no runtime found", and the guard would
+    // be invisible exactly when it had just done its job.
+    const denial = policyDenialWithin(error);
+
+    if (denial) throw denial;
+
     return null;
+
   } finally {
     clearTimeout(timer);
   }

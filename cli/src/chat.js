@@ -5,6 +5,7 @@
 // stick, and every dependency is one more thing to vendor and one more thing
 // that could open a socket of its own.
 
+import { policyDenialWithin } from "./egress.js";
 import { localRuntimeUnreachable } from "./policy.js";
 
 const SYSTEM_PROMPT = [
@@ -55,6 +56,14 @@ export async function* streamCompletion({ baseUrl, apiKey, model, messages, sign
 
     // A user pressing ctrl-c is not a policy event.
     if (signal?.aborted) return;
+
+    // Order matters. The egress guard throws from under fetch, so a refusal
+    // arrives here wrapped in a TypeError and would otherwise be reported as
+    // "the local runtime did not respond" -- a blocked exfiltration attempt
+    // described to the user as an outage.
+    const denial = policyDenialWithin(error);
+
+    if (denial) throw denial;
 
     throw localRuntimeUnreachable(baseUrl, error.message);
 

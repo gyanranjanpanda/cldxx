@@ -311,6 +311,9 @@ code review catches.
    *Built — `cli/`, zero dependencies, `npm test` covers the refusals.*
 2. **The socket interceptor and CODE-001/002** — before any tool exists. Build the cage
    first; retrofitting egress control onto a working agent never finishes.
+   *Built — `cli/src/egress.js`, patched at `net.Socket.prototype.connect` and
+   `tls.connect`, with the refusal threaded through fetch's error wrapper so a
+   blocked connection is never reported as a local outage.*
 3. **Branch C probe + native path** — tools working on a model that supports them.
 4. **Tools: read, grep, edit** — in that order. Edit last, behind `--plan` until the diff
    quality is trusted.

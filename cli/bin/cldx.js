@@ -12,6 +12,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { loadConfig } from "../src/config.js";
+import { armEgressGuard, egressLog } from "../src/egress.js";
 import { discoverRuntime } from "../src/discovery.js";
 import { PolicyDenied } from "../src/policy.js";
 import { runOnce, runSession } from "../src/session.js";
@@ -115,6 +116,14 @@ const main = async () => {
 
   await ensureCldxDir(root);
 
+  // Armed before discovery, not after. The probe loop is itself network
+  // activity, and an exemption carved out for "our own" traffic is the first
+  // thing that grows.
+  armEgressGuard({
+    sovereign: zone.sovereign,
+    allow: config.allowHosts || []
+  });
+
   // 0.4 runtime discovery
   const runtime = await discoverRuntime(root, config, {
     sovereign: zone.sovereign,
@@ -136,7 +145,12 @@ const main = async () => {
 
   if (flags.doctor) {
     process.stdout.write(JSON.stringify(
-      { ...context, zone: { ...zone } },
+      {
+        ...context,
+        zone: { ...zone },
+        egressGuard: zone.sovereign ? "armed" : "not armed (cloud session)",
+        connections: egressLog()
+      },
       null,
       2
     ) + "\n");
