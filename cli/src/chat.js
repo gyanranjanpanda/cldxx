@@ -8,15 +8,30 @@
 import { policyDenialWithin } from "./egress.js";
 import { localRuntimeUnreachable } from "./policy.js";
 
-const SYSTEM_PROMPT = [
+const IDENTITY = [
   "You are cldx code, a coding assistant running on the developer's own hardware.",
-  "Answer concretely and briefly. Prefer showing code over describing it.",
-  "You cannot read or edit files yet -- if the developer asks you to, say so plainly",
-  "and answer from what they have pasted instead of guessing at file contents."
+  "Answer concretely and briefly. Prefer showing code over describing it."
 ].join(" ");
 
-export const newConversation = () => [
-  { role: "system", content: SYSTEM_PROMPT }
+// Told, not left to be inferred. A model that does not know it lacks file
+// access will describe the contents of files it has never seen, confidently,
+// and the developer has no way to tell that apart from a real read.
+const WITHOUT_TOOLS = [
+  "You have no access to the filesystem, the shell, or the network.",
+  "If asked to read, search, or change a file, say plainly that you cannot,",
+  "and work from what the developer has pasted instead of guessing."
+].join(" ");
+
+const WITH_TOOLS = [
+  "Use the provided tools to inspect the repository rather than guessing.",
+  "Never claim to have read a file you did not read with a tool."
+].join(" ");
+
+export const newConversation = ({ toolsUsable = false } = {}) => [
+  {
+    role: "system",
+    content: `${IDENTITY} ${toolsUsable ? WITH_TOOLS : WITHOUT_TOOLS}`
+  }
 ];
 
 /**

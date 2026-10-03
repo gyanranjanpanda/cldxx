@@ -11,6 +11,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { canExecuteTools, resolveCapability } from "../src/capability.js";
 import { loadConfig } from "../src/config.js";
 import { armEgressGuard, egressLog } from "../src/egress.js";
 import { discoverRuntime } from "../src/discovery.js";
@@ -130,9 +131,23 @@ const main = async () => {
     reprobe: flags.reprobe
   });
 
+  // 0.5 capability probe. One model round trip, cached per (endpoint, model),
+  // so the cost is paid once per machine rather than once per invocation.
+  const capability = await resolveCapability(
+    root,
+    {
+      baseUrl: runtime.baseUrl,
+      apiKey: config.apiKey,
+      model: runtime.model,
+      timeoutMs: config.timeoutMs
+    },
+    { reprobe: flags.reprobe }
+  );
+
   const context = {
     root,
     zone,
+    capability,
     baseUrl: runtime.baseUrl,
     runtime: runtime.runtime,
     models: runtime.models,
@@ -149,6 +164,7 @@ const main = async () => {
         ...context,
         zone: { ...zone },
         egressGuard: zone.sovereign ? "armed" : "not armed (cloud session)",
+        toolsExecutable: canExecuteTools(capability.mode),
         connections: egressLog()
       },
       null,
@@ -162,10 +178,7 @@ const main = async () => {
     return;
   }
 
-  // Steps 0.5 (capability probe), 0.6 (context budget) and 0.8 (VS Code
-  // attach) are the next branches. Until they exist the session is
-  // conversation only, which the system prompt states outright rather than
-  // letting the model improvise about files it cannot read.
+  // 0.6 (context budget) and 0.8 (VS Code attach) are the remaining branches.
   await runSession(context);
 
 };

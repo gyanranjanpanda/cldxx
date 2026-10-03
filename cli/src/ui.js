@@ -23,20 +23,34 @@ export const cyan = wrap("36");
  * The line a developer must never have to wonder about: which zone just read
  * their repository, and which model answered.
  */
-export const banner = ({ zone, model, runtime, root, cached, version }) => {
+export const banner = ({ zone, model, runtime, root, cached, version, capability }) => {
 
   const mark = zone.sovereign
     ? green("* Sovereign")
     : yellow("o Cloud");
 
+  const mode = capability?.mode ?? "unprobed";
+
   return [
-    `${bold("cldx code")} ${dim(version)}   ${mark} ${dim("|")} ${cyan(model)} ${dim(`| ${runtime}`)}`,
+    `${bold("cldx code")} ${dim(version)}   ${mark} ${dim("|")} ${cyan(model)} ${dim(`| ${runtime} | ${mode}`)}`,
     dim(`  ${root}`),
     dim(`  zone: ${zone.reason}${cached ? " | runtime from cache" : ""}`),
     ""
   ].join("\n");
 
 };
+
+/**
+ * Said out loud, every session, when tools are unavailable. The spec is
+ * explicit about this: a degraded mode that is announced is a product, a
+ * degraded mode that is silent is a bug report about the agent deleting a file.
+ */
+export const degradedNotice = ({ model, capability }) => [
+  yellow(`  ! ${model} cannot drive tools here -- running read-only.`),
+  dim(`    probe: ${capability.evidence}`),
+  dim(`    it can read and answer; it cannot inspect or change files.`),
+  ""
+].join("\n");
 
 export const policyError = (error) => [
   "",

@@ -3,10 +3,47 @@
 A coding assistant that runs against a model on your own hardware. No prompt,
 no file, and no diff from your repository reaches a cloud provider.
 
-This is **step 1 of 9** from [`../CLDX-CODE.md`](../CLDX-CODE.md): the command,
-the zone decision, runtime discovery, and a streaming conversation. It cannot
-read or edit files yet — that is `feat/cldx-code-file-tools`, which lands after
-the egress interceptor and the capability probe.
+This is **steps 1–3 of 9** from [`../CLDX-CODE.md`](../CLDX-CODE.md): the
+command, the zone decision, runtime discovery, the socket-level egress guard,
+and the tool-capability probe. It cannot read or edit files yet — that is
+`feat/cldx-code-file-tools`, which registers tools against the loop already
+shipped here.
+
+## Branch C — what your model can actually do
+
+Claude Code assumes reliable, trained-in tool calling. A 7B coder on a
+workstation may or may not have it, and an agent loop that assumes it produces
+malformed JSON and burned GPU hours. So it is measured, once, with a single
+request — never inferred from the model's name, which lies: the same weights
+behave differently depending on whether the runtime ships a tool template.
+
+| Probe result | Mode | Tools |
+|---|---|---|
+| a well-formed `tool_calls` entry | `native` | run through the OpenAI tools API |
+| a well-formed call emitted as *text* | `constrained` | step 6 — grammar-constrained decoding |
+| the tool named in prose, no parseable call | `react` | step 6 — tag parsing |
+| the tool ignored, or the runtime rejects `tools` | `read-only` | none |
+
+Anything short of `native` degrades to read-only **and says so, every session**:
+
+```
+cldx code 0.1.0   * Sovereign | qwen2.5-coder:7b | Ollama | constrained
+  ! qwen2.5-coder:7b cannot drive tools here -- running read-only.
+    probe: emitted a well-formed call as text instead of in tool_calls
+```
+
+A degraded mode that is announced is a product. A degraded mode that is silent
+is a bug report about the agent deleting a file.
+
+The system prompt is built from the measured mode, so a read-only session is
+told it has no filesystem. Without that it will describe files it has never
+seen, confidently, and you cannot tell that apart from a real read:
+
+```
+$ cldx code -p "Read src/policy.js and tell me what is in it."
+I cannot read, search, or change files on the filesystem. Please paste the
+content of `src/policy.js` here, and I'll be happy to look at it.
+```
 
 ## Install
 
@@ -112,8 +149,10 @@ version of the leak this exists to prevent.
 npm test
 ```
 
-Nineteen assertions, all of them about refusals and defaults. They need no
-network and no running model.
+Thirty-six assertions, all of them about refusals, classification and loop
+mechanics. They need no network and no running model — the probe and the tool
+loop are tested against a scripted OpenAI-shaped server on loopback, which is
+the only way to cover all four capability branches without four different GPUs.
 
 The egress tests drive real `fetch` calls rather than calling the guard
 directly, because the bug worth catching is only visible that way: Node hands

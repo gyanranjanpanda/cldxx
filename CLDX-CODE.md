@@ -315,6 +315,11 @@ code review catches.
    `tls.connect`, with the refusal threaded through fetch's error wrapper so a
    blocked connection is never reported as a local outage.*
 3. **Branch C probe + native path** — tools working on a model that supports them.
+   *Built — `cli/src/capability.js` classifies into all four modes and caches per
+   (endpoint, model); `cli/src/tools.js` is the native loop. Measured on Ollama +
+   `qwen2.5-coder:7b`: **constrained**, not native — it emits a well-formed call
+   as text. The native path is covered by a scripted runtime, not by a local
+   model, because no model on hand exhibits it.*
 4. **Tools: read, grep, edit** — in that order. Edit last, behind `--plan` until the diff
    quality is trusted.
 5. **Branch D: repo map + budget** — the step that makes it usable on a real repo rather

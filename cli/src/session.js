@@ -4,8 +4,10 @@
 // that would have to be undone to get there.
 
 import readline from "node:readline";
+import { canExecuteTools } from "./capability.js";
 import { newConversation, streamCompletion } from "./chat.js";
-import { banner, bold, cyan, dim, policyError } from "./ui.js";
+import { runToolLoop } from "./tools.js";
+import { banner, bold, cyan, degradedNotice, dim, policyError } from "./ui.js";
 
 const HELP = [
   "  /model <name>   switch model for the rest of the session",
@@ -17,7 +19,16 @@ const HELP = [
 
 export const runSession = async (context) => {
 
+  const toolsUsable = canExecuteTools(context.capability.mode);
+
+  // Step 3 registers no tools; step 4 fills this. The loop below already
+  // handles a populated list, so that change is additive rather than a rewrite.
+  const tools = context.tools ?? [];
+
   process.stdout.write(banner(context));
+
+  if (!toolsUsable) process.stdout.write(degradedNotice(context));
+
   process.stdout.write(dim(`  /help for commands\n\n`));
 
   const rl = readline.createInterface({
@@ -26,7 +37,7 @@ export const runSession = async (context) => {
     prompt: bold("> ")
   });
 
-  let messages = newConversation();
+  let messages = newConversation({ toolsUsable });
   let model = context.model;
 
   // ctrl-c cancels the answer being streamed; a second one at an empty prompt
@@ -66,7 +77,7 @@ export const runSession = async (context) => {
       if (command === "help") {
         process.stdout.write(`${HELP}\n\n`);
       } else if (command === "clear") {
-        messages = newConversation();
+        messages = newConversation({ toolsUsable });
         process.stdout.write(dim("  conversation cleared\n\n"));
       } else if (command === "models") {
         process.stdout.write(
@@ -102,6 +113,41 @@ export const runSession = async (context) => {
     try {
 
       process.stdout.write("\n");
+
+      // Tool calls have to arrive whole before they can be run, so a turn that
+      // may use them is resolved unstreamed first and only the final prose is
+      // streamed. A session with no usable tools skips that entirely and
+      // streams from the first token, which is the common case on local
+      // hardware and the one worth keeping fast.
+      if (toolsUsable && tools.length > 0) {
+
+        const outcome = await runToolLoop(
+          {
+            baseUrl: context.baseUrl,
+            apiKey: context.apiKey,
+            model,
+            timeoutMs: context.timeoutMs,
+            signal: streaming.signal
+          },
+          messages,
+          tools,
+          {
+            onToolCall: (call) =>
+              process.stdout.write(dim(`  . ${call.function?.name}\n`))
+          }
+        );
+
+        answer = outcome.content;
+
+        process.stdout.write(`${answer}\n\n`);
+
+        if (answer) messages.push({ role: "assistant", content: answer });
+
+        streaming = null;
+        rl.prompt();
+        continue;
+
+      }
 
       for await (const delta of streamCompletion({
         baseUrl: context.baseUrl,
@@ -153,7 +199,10 @@ export const runSession = async (context) => {
  */
 export const runOnce = async (context, prompt) => {
 
-  const messages = [...newConversation(), { role: "user", content: prompt }];
+  const messages = [
+    ...newConversation({ toolsUsable: canExecuteTools(context.capability.mode) }),
+    { role: "user", content: prompt }
+  ];
 
   for await (const delta of streamCompletion({
     baseUrl: context.baseUrl,
