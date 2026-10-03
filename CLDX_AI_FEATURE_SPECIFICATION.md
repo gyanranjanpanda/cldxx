@@ -153,6 +153,11 @@ To elevate cldxAI far beyond any conventional AI client, the following strategic
   - AST-aware repository indexing (Tree-sitter) executed 100% locally.
   - Local test-runner integration (executes tests, parses errors, and auto-repairs code locally).
 - **Offline / Subnet Mode:** Operates with zero internet connectivity on air-gapped workstations or corporate intranet networks.
+- **One-Command Activation:** A developer opens a repository in VS Code and types a single command — `cldx code`. Runtime discovery, model capability detection, context budgeting, and policy arming are fully automatic; there is no API key prompt, no model picker, and no configuration file to author first.
+- **Small-Model Reliability Engine:** Self-hosted open models vary widely in tool-calling fidelity. CLDX Code probes the model at session start and selects an execution strategy accordingly — native tool API, grammar-constrained decoding (vLLM `guided_json` / llama.cpp GBNF), tag-based ReAct parsing, or an explicitly announced read-only mode. Degradation is always surfaced to the developer, never silent.
+- **Fail-Closed Egress Policy (CODE-001 — CODE-005):** Extends the Sovereign Mode policy gate to the developer workflow: no cloud fallback during a local-runtime outage, stdio-only MCP transports (tool arguments in a coding agent *are* source code), shell allowlisting, and full telemetry suppression. Enforced centrally and verified by an automated socket-interception test suite.
+
+> **Engineering specification:** see [`CLDX-CODE.md`](./CLDX-CODE.md) for the full decision-branch architecture, policy rules, VS Code transport design, and implementation order.
 
 ---
 
