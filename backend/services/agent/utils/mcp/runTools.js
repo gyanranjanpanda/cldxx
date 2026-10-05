@@ -1,9 +1,10 @@
-import { AIMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
+import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
 import { McpSession, fetchServers } from "./registry.js";
 import { selectServers } from "./intent.js";
 import { getModel } from "../model.js";
 import { audit } from "../audit.js";
 import { newFence, untrustedContentRules, wrapUntrusted } from "../guardrails.js";
+import { parseTextToolCalls, textToolContract } from "./textCalls.js";
 
 // Each round trip is a full model call, so this caps cost and stops a server
 // that keeps asking to be called again from looping forever.
@@ -221,6 +222,27 @@ const withToolPolicy = (messages, specs, fence) => {
         : String(head.content ?? ""));
 
   return [new SystemMessage(`${existing}\n\n${policy}`), ...rest];
+
+};
+
+// Appended to the system prompt rather than prepended, so the agent's own
+// instructions still read first.
+const withTextContract = (messages, specs) => {
+
+  const contract = textToolContract(specs);
+  const [head, ...rest] = messages;
+
+  if (head?.getType?.() !== "system") {
+    return [new SystemMessage(contract), ...messages];
+  }
+
+  const existing = typeof head.content === "string"
+    ? head.content
+    : (Array.isArray(head.content)
+        ? head.content.map((block) => block?.text ?? "").join("\n")
+        : String(head.content ?? ""));
+
+  return [new SystemMessage(`${existing}\n\n${contract}`), ...rest];
 
 };
 
@@ -447,26 +469,59 @@ export const runWithMcpTools = async ({ llm, messages, userId, state = {} }) => 
 
     const llmWithTools = toolLlm.bindTools(specs);
 
+    // Self-hosted models mostly do not populate tool_calls; they write the call
+    // into the reply text. bindTools() alone therefore binds nothing usable in
+    // Sovereign Mode, and the loop below would conclude on every round that no
+    // tool was wanted. The contract is added only for those models -- giving a
+    // natively capable one a second, competing channel makes it pick the wrong
+    // one.
+    const textProtocol = state?.sovereign === true;
+
     // Placed after the agent's own system prompt so it reads as an addition to
     // it, not a competing first instruction.
     // One fence for the whole turn, so every tool result in this thread is
     // sealed with a delimiter no server could have known in advance.
     const fence = newFence();
 
-    const thread = withToolPolicy(messages, specs, fence);
+    const thread = withToolPolicy(
+      textProtocol
+        ? withTextContract(messages, specs)
+        : messages,
+      specs,
+      fence
+    );
 
     const executed = [];
 
     for (let round = 0; round < MAX_ROUNDS; round++) {
 
       const reply = await invokeWithRetry(llmWithTools, thread);
-      const calls = reply.tool_calls || [];
+
+      let calls = reply.tool_calls || [];
+
+      // Nothing in the protocol field. Before concluding the model wanted no
+      // tool, look in the text -- that is where most local models put it.
+      // Gated on the call naming a tool actually offered this turn, so a reply
+      // that merely contains JSON (every other answer from a coding agent) is
+      // not executed.
+      let viaText = false;
+
+      if (!calls.length) {
+
+        const recovered = parseTextToolCalls(reply.content, specs);
+
+        if (recovered.length) {
+          calls = recovered;
+          viaText = true;
+        }
+
+      }
 
       if (!calls.length) {
         return { response: readReply(reply), toolCalls: executed, mcpErrors: errors };
       }
 
-      thread.push(reply);
+      thread.push(viaText ? new AIMessage(readReply(reply)) : reply);
 
       // Sequential on purpose: MCP servers are often a single local process,
       // and a parallel burst is the fastest way to trip their rate limits.
@@ -487,11 +542,20 @@ export const runWithMcpTools = async ({ llm, messages, userId, state = {} }) => 
           isError: result.isError
         });
 
-        thread.push(new ToolMessage({
-          tool_call_id: call.id,
-          name:         call.name,
-          content:      text
-        }));
+        // A ToolMessage has to answer a tool_call the assistant turn actually
+        // made. When the call was recovered from text there is no such id, and
+        // providers reject -- or worse, silently drop -- a tool turn that
+        // answers nothing. The result goes back as an ordinary user turn, which
+        // every chat template understands.
+        thread.push(
+          viaText
+            ? new HumanMessage(`Result of ${call.name}:\n${text}`)
+            : new ToolMessage({
+                tool_call_id: call.id,
+                name:         call.name,
+                content:      text
+              })
+        );
 
       }
 
