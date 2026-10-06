@@ -39,7 +39,7 @@ const connect = () => {
 
   connection = mongoose.createConnection(SOVEREIGN_MONGODB_URL);
 
-  connection.on("connected", () =>
+  connection.once("connected", () =>
     console.log("✅ Sovereign store connected")
   );
 
