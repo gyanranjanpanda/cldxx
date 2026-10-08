@@ -66,4 +66,8 @@ mongoose.model(
   messageSchema
 );
 
+// Exported for the same reason as conversationSchema: the sovereign store is a
+// second connection with identical shapes, not a second definition of them.
+export { messageSchema };
+
 export default Message;

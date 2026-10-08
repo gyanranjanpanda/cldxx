@@ -1,6 +1,8 @@
+import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { checkAgentLimit } from "../config/agentRateLimit.js";
 import { deductCredits } from "../utils/deductCredits.js";
 import { getModel } from "../utils/model.js";
+import { runWithMcpTools } from "../utils/mcp/runTools.js";
 
 function cleanCode(code = "") {
   return code
@@ -57,7 +59,7 @@ export const codingAgent = async (state) => {
 
   const llm = getModel("coding", state);
 
-  const response = await llm.invoke(`You are cldxAI Coding Agent.
+  const instructions = `You are cldxAI Coding Agent.
 
 Your first task is to identify the user's intent.
 
@@ -273,19 +275,42 @@ COMPLETENESS
 
 Finish every file you start. A truncated file is worse than a smaller project.
 
-Write complete, working code — this runs immediately with no edits.
+Write complete, working code — this runs immediately with no edits.`;
 
-User Request:
+  // The user request is its own turn rather than the tail of the instruction
+  // block, because the MCP tool loop appends its policy to the system message
+  // and feeds tool results back as later turns -- a request buried inside the
+  // system prompt would sit above every one of them.
+  const messages = [
+    new SystemMessage(instructions),
+    new HumanMessage(state.prompt)
+  ];
 
-${state.prompt}`);
+  // Tools the user has enabled are bound here too. Until now only the chat
+  // agent called this, so a coding turn silently had no MCP at all: the
+  // sidebar showed a server connected, the agent could not reach it, and the
+  // model answered from memory about a tool it never ran.
+  const { response, toolCalls, mcpErrors } = await runWithMcpTools({
+    llm,
+    messages,
+    userId: state.userId,
+    state
+  });
 
-  const content = response.content?.trim() || "";
+  if (mcpErrors?.length) {
+    console.warn("[mcp] unreachable servers:", mcpErrors);
+  }
+
+  const content = typeof response === "string"
+    ? response.trim()
+    : String(response ?? "").trim();
 
   if (!content.includes("FILE:")) {
     return {
       ...state,
       response: content,
-      artifacts: []
+      artifacts: [],
+      toolCalls: toolCalls || []
     };
   }
 
@@ -306,7 +331,8 @@ ${state.prompt}`);
     return {
       ...state,
       response: content,
-      artifacts: []
+      artifacts: [],
+      toolCalls: toolCalls || []
     };
   }
 
@@ -314,6 +340,10 @@ ${state.prompt}`);
     ...state,
 
     response: buildSummary(state.prompt, files),
+
+    // Surfaced so the UI can show what the answer actually ran, matching the
+    // chat agent.
+    toolCalls: toolCalls || [],
 
     artifacts: [
       {

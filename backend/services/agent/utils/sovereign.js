@@ -7,6 +7,15 @@ dotenv.config();
 // rather than a vendor -- binding to one of them would make the product only
 // as portable as whichever we picked.
 
+// The zone rule is shared with the gateway -- see shared/zone/zone.js. Both
+// services have to answer "is this turn sovereign" identically, so there is
+// one implementation and these are re-exports of it.
+export {
+ SOVEREIGN_POLICIES,
+ isSovereign,
+ resolveSovereign
+} from "../../../shared/zone/zone.js";
+
 export const SOVEREIGN_BASE_URL =
  process.env.SOVEREIGN_BASE_URL || "";
 
@@ -44,15 +53,6 @@ export const localModelFor =
 
 };
 
-// A turn is sovereign when the client asks for it. The string form is here
-// because the browser sends this over multipart/form-data alongside a file
-// upload, where every field arrives as text -- `sovereign: false` and
-// `sovereign: "false"` must not mean different things.
-export const isSovereign =
-(value)=>
- value === true ||
- value === "true";
-
 // Agents that cannot run without reaching a third party. Image generation is a
 // Gemini call and search is a Tavily call; there is no local substitute wired
 // up, so in Sovereign Mode they are refused rather than quietly served from the
@@ -63,6 +63,76 @@ export const CLOUD_ONLY_AGENTS =
   "image",
   "search"
  ]);
+
+// ── What the configured local model can actually do ────────────────────────
+//
+// localModelFor() returns a name; nothing verified the model behind it could
+// do the job. The default falls through to a general text model, so a vision
+// turn in Sovereign Mode handed an image to a model that cannot see and got
+// back a confident description of nothing. A wrong answer is worse than a
+// refusal, because the user believes it.
+//
+// Matched on substrings because a deployment names its own models: "llava",
+// "llava:13b" and "my-org/llava-v1.6" are all the same capability.
+const CAPABILITY_MARKERS = {
+
+ vision:[
+  "llava", "vision", "-vl", "minicpm-v", "moondream", "pixtral", "gemma3"
+ ],
+
+ tools:[
+  "kimi", "qwen", "llama3.1", "llama3.2", "llama3.3", "mistral", "mixtral",
+  "command-r", "firefunction", "hermes", "deepseek", "gpt-oss", "granite"
+ ]
+
+};
+
+// Which agents genuinely need a capability. Everything absent needs plain text
+// generation, which every model can do.
+const AGENT_NEEDS = {
+ vision:"vision"
+};
+
+export const modelSupports =
+(model, capability)=>{
+
+ const markers =
+  CAPABILITY_MARKERS[capability];
+
+ if(!markers) return true;
+
+ const name =
+  String(model || "").toLowerCase();
+
+ return markers.some(
+  (marker)=> name.includes(marker)
+ );
+
+};
+
+/**
+ * Refuses rather than answering badly when the configured local model cannot
+ * do what the agent needs. Only applies in Sovereign Mode -- a cloud route
+ * picks its own known-capable model.
+ */
+export const assertModelCapable =
+(agent, model, sovereign)=>{
+
+ if(!sovereign) return;
+
+ const needed =
+  AGENT_NEEDS[agent];
+
+ if(!needed) return;
+
+ if(modelSupports(model, needed)) return;
+
+ throw new PolicyDenied(
+  `The local model configured for this route ("${model}") cannot handle ${needed}. Point SOVEREIGN_VISION_MODEL at a model that can, or use this agent in Cloud Mode.`,
+  "SOV-006"
+ );
+
+};
 
 export class PolicyDenied extends Error{
 

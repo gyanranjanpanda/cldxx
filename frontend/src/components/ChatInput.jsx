@@ -3,6 +3,7 @@ import { Send, Paperclip, Square, FileText, X } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { addMessage, setArtifacts, setIsLoading } from "../redux/message.slice";
 import { sendPrompt } from "../features/agent.api";
+import { generateImage } from "../features/image.api";
 import api from "../utils/axios";
 import { Mic, MicOff, Loader2 } from "lucide-react";
 import { useEffect } from "react";
@@ -259,14 +260,14 @@ const toggleMic = () => {
         let conversation = selectedConversation;
 
         if (!conversation) {
-          const newConversation = await createConversation();
+          const newConversation = await createConversation(Boolean(sovereign));
           dispatch(addConversation(newConversation));
           dispatch(setSelectedConversation(newConversation));
           conversation = newConversation;
         }
 
         if (conversation.title === "New Chat") {
-          await updateConversations(conversation._id, title);
+          await updateConversations(conversation._id, title, Boolean(sovereign));
           dispatch(setConvTitle({ conversationId: conversation._id, title }));
         }
 
@@ -275,6 +276,59 @@ const toggleMic = () => {
 
       dispatch(addMessage({ role: "user", content: prompt }));
       setValue("");
+
+      // The Image pill generates on the user's own ComfyUI, which is a queue
+      // and a poll rather than a single request -- a Z-Image Turbo run is
+      // 30-90s on a T4, far longer than a request can be held open. See
+      // features/image.api.js.
+      //
+      // Two cases deliberately stay on the normal path. A sovereign turn,
+      // because that server is reached over a public tunnel and policy routes
+      // image generation away entirely; and an attached file, because that is
+      // a question about a picture rather than a request for one.
+      if (selectedAgent === "image" && !sovereign && !selectedFile) {
+
+        const result = await generateImage({
+          prompt,
+          conversationId,
+          incognito: Boolean(incognito),
+          sovereign: false
+        });
+
+        // Dual mode. A Colab tunnel is down more often than it is up, so an
+        // unreachable ComfyUI falls through to the ordinary chat path below,
+        // where the router sends "image" to the pollinations agent. That agent
+        // does its own credits, rate limiting and persistence, and the server
+        // spent none of them before reporting itself offline -- so the picture
+        // is paid for exactly once, by whichever engine actually draws it.
+        //
+        // Said out loud rather than swapped in silently: the two engines do not
+        // produce the same picture, and finding that out from the output is
+        // worse than being told.
+        if (result.offline) {
+
+          setBanner({
+            open: true,
+            title: "Z-Image Turbo is offline",
+            message:
+              "Your ComfyUI server did not answer, so this image is being generated with the backup service instead."
+          });
+
+        } else {
+
+          dispatch(
+            addMessage({
+              role: "assistant",
+              content: result.answer,
+              images: result.images
+            })
+          );
+
+          return;
+
+        }
+
+      }
 
       const formData = new FormData();
 
@@ -352,10 +406,12 @@ catch(error){
 
     title:
       error.response?.data?.title ||
+      error.title ||
       "Something went wrong",
 
     message:
       error.response?.data?.message ||
+      error.detail ||
       "Please try again."
 
   });

@@ -6,6 +6,7 @@ import { deductCredits } from "../utils/deductCredits.js";
 import { describeNow } from "../utils/now.js";
 import { newFence, untrustedContentRules, wrapUntrusted } from "../utils/guardrails.js";
 import { runWithMcpTools } from "../utils/mcp/runTools.js";
+import { hasRestrictedHistory } from "../utils/memory.js";
 
 
 export const chatAgent =
@@ -28,9 +29,12 @@ await checkAgentLimit(
  const llm =
  getModel("chat", state);
 
+ // The zone decides what this turn is allowed to see: a sovereign turn reads
+ // both tiers, a cloud turn only its own.
  const history =
  await getMemory(
-  state.conversationId
+  state.conversationId,
+  { sovereign: state.sovereign === true }
  );
 
  
@@ -186,6 +190,26 @@ Formatting:
   }
 
  });
+
+ // A cloud turn in a conversation that also has sovereign turns is missing
+ // context it cannot be shown. Left unsaid, the model invents what it thinks
+ // was discussed; told, it can say plainly that it cannot see it. Note this
+ // carries a boolean -- the existence of restricted turns, never their
+ // content.
+ if(
+  state.sovereign !== true &&
+  await hasRestrictedHistory(state.conversationId)
+ ){
+
+  messages.push(
+
+   new SystemMessage(
+`Some earlier turns in this conversation were answered in Sovereign Mode and are not visible here. If the user refers to them, say they are only available in Sovereign Mode. Do not guess at what they contained.`
+   )
+
+  );
+
+ }
 
  messages.push(
 

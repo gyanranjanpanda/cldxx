@@ -4,7 +4,7 @@ import Editor from "@monaco-editor/react";
 import { FiCode } from "react-icons/fi";
 import { detectLanguage } from "../utils/detectLanguage";
 import { buildPreviewDoc } from "../utils/buildPreviewDoc";
-import { Code2, Eye, PanelRightClose, PanelRightOpen, X, Copy, Check } from "lucide-react";
+import { Code2, Eye, PanelRightClose, PanelRightOpen, X, Copy, Check, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 // Shared empty array so the memo below keeps a stable dependency when there is
@@ -44,6 +44,58 @@ export default function ArtifactPanel() {
     const id = setTimeout(focusPreview, 120);
     return () => clearTimeout(id);
   }, [tab, previewDoc]);
+
+  // What the running preview reported about itself: a blocked alert, a blocked
+  // navigation, or a thrown error. Without this the panel can only ever show a
+  // blank rectangle, which is the least useful thing it could say.
+  const [notice, setNotice] = useState(null);
+
+  // Bumping this remounts the iframe, which is the only way to restart a
+  // preview that has run itself into a corner.
+  const [runId, setRunId] = useState(0);
+
+  // How many times the current document has executed. More than once without
+  // us remounting means the page reloaded itself.
+  const boots = useRef(0);
+
+  useEffect(() => {
+    const onMessage = (event) => {
+      // The iframe is sandboxed without allow-same-origin, so its origin is
+      // the string "null" and cannot be checked. Identity comes from the
+      // window reference instead, which a page in another tab cannot forge.
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      if (!event.data?.__cldxPreview) return;
+
+      // Each run of the document announces itself. A second announcement for
+      // the same document means the page navigated and came back -- almost
+      // always location.reload() in a loop, which no amount of shimming inside
+      // the frame can prevent. Naming it beats letting the panel flicker.
+      if (event.data.kind === "boot") {
+        boots.current += 1;
+        if (boots.current > 1) {
+          setNotice({
+            kind: "nav",
+            text: "This page restarts itself (it calls location.reload). The preview will keep flickering until that is fixed."
+          });
+        }
+        return;
+      }
+
+      setNotice({ kind: event.data.kind, text: event.data.text });
+    };
+
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
+  // A fresh document is a fresh run, so last run's complaint should not
+  // persist. Clearing it is the whole point of the effect, and there is
+  // nothing for the render it triggers to cascade into.
+  useEffect(() => {
+    boots.current = 0;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNotice(null);
+  }, [previewDoc, runId]);
 
   // Keep every hook above this line -- returning earlier changes the hook count
   // the moment an artifact arrives and unmounts the whole app.
@@ -148,8 +200,9 @@ export default function ArtifactPanel() {
       <div className="flex-1 overflow-hidden">
         <AnimatePresence mode="wait">
           {tab === "preview" && canPreview ? (
-            <motion.div key="preview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="w-full h-full">
+            <motion.div key="preview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="relative w-full h-full">
               <iframe
+                key={runId}
                 ref={iframeRef}
                 title="preview"
                 sandbox="allow-scripts"
@@ -157,6 +210,35 @@ export default function ArtifactPanel() {
                 onLoad={focusPreview}
                 className="w-full h-full bg-white"
               />
+
+              {notice && (
+                <div className="absolute left-0 right-0 bottom-0 p-3">
+                  <div className="flex items-start gap-2 rounded-lg bg-[#1a1d24] border border-amber-500/25 px-3 py-2.5 shadow-lg">
+                    <AlertTriangle size={13} className="text-amber-400 shrink-0 mt-px" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-semibold text-amber-300/90 uppercase tracking-wide">
+                        {notice.kind === "alert" ? "Message from the page"
+                          : notice.kind === "nav" ? "Navigation blocked"
+                          : "Script error"}
+                      </p>
+                      <p className="text-[12px] text-slate-300 mt-0.5 break-words">{notice.text}</p>
+                    </div>
+                    <button
+                      onClick={() => setRunId((n) => n + 1)}
+                      className="shrink-0 text-[11.5px] font-medium text-indigo-400 hover:text-indigo-300 bg-transparent border-none cursor-pointer"
+                    >
+                      Restart
+                    </button>
+                    <button
+                      onClick={() => setNotice(null)}
+                      aria-label="Dismiss"
+                      className="shrink-0 flex items-center justify-center w-6 h-6 rounded text-slate-500 hover:text-slate-200 bg-transparent border-none cursor-pointer"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </motion.div>
           ) : (
             <motion.div key={`code-${activeFile}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="w-full h-full">

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { FiExternalLink, FiX } from "react-icons/fi";
@@ -10,6 +11,28 @@ function MessageBubble({ role, content ,images}) {
   const isUser = role === "user";
   const [lightboxSrc, setLightboxSrc] = useState(null);
 const [copiedCode, setCopiedCode] = useState("");
+
+// Escape closes, and the chat behind is frozen -- without the lock a trackpad
+// scroll moves the conversation under the overlay while the picture stays put.
+useEffect(() => {
+
+  if (!lightboxSrc) return;
+
+  const onKey = (e) => {
+    if (e.key === "Escape") setLightboxSrc(null);
+  };
+
+  document.addEventListener("keydown", onKey);
+
+  const previousOverflow = document.body.style.overflow;
+  document.body.style.overflow = "hidden";
+
+  return () => {
+    document.removeEventListener("keydown", onKey);
+    document.body.style.overflow = previousOverflow;
+  };
+
+}, [lightboxSrc]);
 const copyCode = async (code) => {
   await navigator.clipboard.writeText(code);
 
@@ -198,25 +221,35 @@ const markdown = (content || "")
 </ReactMarkdown>
       </div>
 
-      {lightboxSrc && (
-        <div
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6"
-          onClick={() => setLightboxSrc(null)}
-        >
-          <button
-            type="button"
+      {lightboxSrc &&
+        createPortal(
+          // Rendered into <body> on purpose. Every message is wrapped in a
+          // framer-motion div, and a transformed ancestor becomes the
+          // containing block for position:fixed -- so inset-0 resolved to the
+          // message row rather than the window. The backdrop stopped at the
+          // sidebar and the picture was clipped by the composer.
+          <div
+            className="fixed inset-0 z-[999] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 md:p-8"
             onClick={() => setLightboxSrc(null)}
-            className="absolute top-5 right-5 text-white/80 hover:text-white bg-white/10 rounded-full p-2"
+            role="dialog"
+            aria-modal="true"
           >
-            <FiX size={20} />
-          </button>
-          <img
-            src={lightboxSrc}
-            onClick={(e) => e.stopPropagation()}
-            className="max-w-[90vw] max-h-[85vh] rounded-2xl border border-white/10 shadow-2xl object-contain"
-          />
-        </div>
-      )}
+            <button
+              type="button"
+              onClick={() => setLightboxSrc(null)}
+              aria-label="Close image"
+              className="absolute top-4 right-4 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-full p-2 transition"
+            >
+              <FiX size={20} />
+            </button>
+            <img
+              src={lightboxSrc}
+              onClick={(e) => e.stopPropagation()}
+              className="max-w-full max-h-full w-auto h-auto rounded-2xl border border-white/10 shadow-2xl object-contain"
+            />
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

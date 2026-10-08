@@ -31,6 +31,69 @@ const looksLikeServerCode = (f) => NODE_MARKERS.test(f.content || "");
 const safeForScriptTag = (code = "") => code.replace(/<\/script>/gi, "<\\/script>");
 const safeForStyleTag = (code = "") => code.replace(/<\/style>/gi, "<\\/style>");
 
+// Keeps a buggy generated page from destroying its own preview.
+//
+// The panel already shields the host from generated code. This shields the
+// preview from itself, which turns out to matter more: a page that calls
+// location.reload() inside a srcDoc iframe does not re-run -- it navigates
+// away and leaves a white rectangle, with no clue as to why. That is a real
+// failure we hit, from a snake game whose game-over check fired on frame one
+// and reloaded before the user could press a key.
+//
+// alert() is blocked outright by sandbox="allow-scripts" (no allow-modals), so
+// a page that tries to explain itself through one says nothing at all. Both are
+// forwarded to the panel instead, which can actually show them.
+//
+// Navigation itself cannot be stopped from inside the frame (see below), so
+// the guard announces each run instead and lets the panel recognise a page
+// that keeps restarting itself.
+const PREVIEW_GUARD = `<script>
+(function () {
+  // A broken game loop reports the same failure every frame -- the snake game
+  // this was built for managed several hundred in the first second. The panel
+  // only shows the latest, but posting them is still work, so the guard goes
+  // quiet after a handful and says so once.
+  var sent = 0;
+  var LIMIT = 12;
+
+  var send = function (kind, text) {
+    if (sent > LIMIT) return;
+    sent += 1;
+    var body = sent > LIMIT
+      ? "further messages suppressed — the page is repeating this every frame"
+      : String(text);
+    try { parent.postMessage({ __cldxPreview: true, kind: kind, text: body }, "*"); } catch (e) {}
+  };
+
+  // Modals the sandbox would swallow silently.
+  window.alert   = function (m) { send("alert", m); };
+  window.confirm = function (m) { send("alert", m); return false; };
+  window.prompt  = function (m) { send("alert", m); return null; };
+
+  // Navigation cannot actually be prevented from in here. location.reload,
+  // assign and replace are [LegacyUnforgeable] in WebIDL, which makes them
+  // own, non-configurable properties of the location object -- assigning to
+  // Location.prototype is simply ignored, and defineProperty throws. Measured,
+  // not assumed: a page calling location.reload() in a loop re-ran this guard
+  // hundreds of times in one second.
+  //
+  // So the guard reports rather than blocks. Announcing each execution lets
+  // the panel notice a document that keeps restarting itself and say so, which
+  // is the part the user actually needs -- the alternative is a preview that
+  // flickers or blanks with no explanation.
+  send("boot", "preview started");
+
+  // A thrown error otherwise shows as an unexplained blank or frozen frame.
+  window.addEventListener("error", function (e) {
+    send("error", (e.message || "Script error") + (e.lineno ? " (line " + e.lineno + ")" : ""));
+  });
+
+  window.addEventListener("unhandledrejection", function (e) {
+    send("error", "Unhandled promise rejection: " + ((e.reason && e.reason.message) || e.reason));
+  });
+}());
+</script>`;
+
 export function buildPreviewDoc(files = [], htmlFile = null) {
   if (!htmlFile) return "";
 
@@ -84,6 +147,7 @@ export function buildPreviewDoc(files = [], htmlFile = null) {
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+${PREVIEW_GUARD}
 ${styleBlock}
 </head>
 <body>
@@ -92,6 +156,12 @@ ${scriptBlock}
 </body>
 </html>`;
   }
+
+  // First thing in the document, so it is already in place when the generated
+  // scripts run. A page with no <head> gets it prepended instead.
+  html = /<head[^>]*>/i.test(html)
+    ? html.replace(/<head[^>]*>/i, (tag) => `${tag}\n${PREVIEW_GUARD}`)
+    : `${PREVIEW_GUARD}\n${html}`;
 
   if (styleBlock) {
     html = /<\/head>/i.test(html)

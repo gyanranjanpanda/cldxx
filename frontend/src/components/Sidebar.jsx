@@ -175,7 +175,16 @@ export default function Sidebar() {
     dispatch(setSelectedConversation(conversation));
     const messages = await getMessages(conversation._id);
     dispatch(setMessages(messages));
-    dispatch(setArtifacts(messages.artifacts));
+
+    // `messages` is an array, so `messages.artifacts` was always undefined and
+    // this blanked the preview panel on every conversation switch until
+    // MessageList's effect happened to refill it. Read them off the message
+    // that actually carries them, newest first.
+    const latest = [...messages]
+      .reverse()
+      .find((msg) => msg.artifacts?.length);
+
+    dispatch(setArtifacts(latest ? latest.artifacts : []));
   };
 
   const toggleSearch = () => {

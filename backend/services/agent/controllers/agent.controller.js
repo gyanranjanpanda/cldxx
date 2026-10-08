@@ -2,7 +2,8 @@ import redis from "../../../shared/redis/redis.js";
 import { graph } from "../graph/supervisor.graph.js";
 import { addMessage, isEphemeral } from "../utils/memory.js";
 import { internalApi } from "../utils/internalApi.js"
-import { isSovereign } from "../utils/sovereign.js";
+import { resolveSovereign } from "../utils/sovereign.js";
+import { audit } from "../utils/audit.js";
 import { fetchUserKeys } from "../utils/userKeys.js";
 
 export const chat =
@@ -37,26 +38,71 @@ const isIncognito =
  incognito === true ||
  incognito === "true";
 
-// Sovereign Mode is decided per turn, not per deployment, so it arrives with
-// the request. Over multipart/form-data every field is a string, which is why
-// this is not a bare boolean check.
+// Sovereign Mode is decided per turn, but not by the turn alone: the
+// organisation's policy arrives on a header the gateway sets and the client
+// cannot, and it outranks the request. A user may ask for Sovereign Mode; only
+// an administrator may require it.
+const zone =
+ resolveSovereign(
+  req.headers["x-sovereign-policy"],
+  sovereign
+ );
+
 const isSovereignTurn =
- isSovereign(sovereign);
+ zone.sovereign;
+
+// Worth a line in the audit log in both directions: a turn that ran locally
+// because policy said so, and a turn that policy would have run locally had
+// the user not declined, are the two questions a reviewer asks later.
+if(zone.forced || zone.optedOut){
+
+ audit({
+
+  userId: req.headers["x-user-id"],
+
+  conversationId,
+
+  agent,
+
+  zone:
+  zone.sovereign ? "SOVEREIGN" : "CLOUD",
+
+  decision:
+  zone.forced ? "FORCED" : "ALLOW",
+
+  rule: "SOV-007",
+
+  model: null,
+
+  endpoint: zone.policy
+
+ });
+
+}
 
 // Redis still gets the turn either way -- that is what makes the *next* message
-// in this session aware of this one. For incognito it expires on its own.
+// in this session aware of this one. For incognito it expires on its own. The
+// zone decides which tier it lands in; a sovereign turn is never written where
+// a cloud turn could read it.
 await addMessage(
  conversationId,
  "user",
- prompt
+ prompt,
+ { sovereign:isSovereignTurn }
 );
 
+// The zone travels with the message and the gateway decides where it may be
+// written: the on-premises store when one is configured, nowhere at all when
+// there is not. The rule is "never persist outside the boundary", not "never
+// persist" -- on-premises the database belongs to the customer, and refusing
+// to use it would lose their own work for no security gain.
 if(!isIncognito){
 
  await internalApi.post(`/save-message`,{
    conversationId,
    role:"user",
-   content:prompt
+   content:prompt,
+   sovereign:isSovereignTurn
  })
 
 }
@@ -107,9 +153,11 @@ if(!isIncognito){
    await addMessage(
     conversationId,
     "assistant",
-    result.response
+    result.response,
+    { sovereign:isSovereignTurn }
    );
 
+   // Same rule for the answer as for the prompt: it carries the same content.
    if(!isIncognito){
 
     await internalApi.post(
@@ -120,7 +168,8 @@ if(!isIncognito){
       content:result.response,
       images:result.images,
       artifacts:
-      result.artifacts || []
+      result.artifacts || [],
+      sovereign:isSovereignTurn
      }
     )
 

@@ -1,0 +1,6 @@
+{
+  "http://127.0.0.1:11434/v1|qwen2.5-coder:7b": {
+    "mode": "constrained",
+    "evidence": "emitted a well-formed call as text instead of in tool_calls"
+  }
+}

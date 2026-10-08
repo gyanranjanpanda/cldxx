@@ -11,8 +11,11 @@ import {
  SOVEREIGN_API_KEY,
  localModelFor,
  assertSovereignReady,
- assertAgentAllowed
+ assertAgentAllowed,
+ assertModelCapable
 } from "./sovereign.js";
+
+import { assertModelIntegrity, fingerprintOf } from "./provenance.js";
 
 import { audit } from "./audit.js";
 
@@ -82,6 +85,15 @@ export const getModel =
 
   const model = localModelFor(agent);
 
+  // Checked after the agent is allowed but before anything is constructed: a
+  // model that cannot do the job should refuse here, not produce a confident
+  // answer about an image it never saw.
+  assertModelCapable(agent, model, sovereign);
+
+  // Checked before the client is built: a substituted model should be refused,
+  // not discovered in the log afterwards.
+  assertModelIntegrity(model, sovereign);
+
   audit({
 
    ...context,
@@ -89,6 +101,8 @@ export const getModel =
    zone: "SOVEREIGN",
 
    model,
+
+   modelDigest: fingerprintOf(model).digest,
 
    endpoint: SOVEREIGN_BASE_URL,
 

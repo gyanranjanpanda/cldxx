@@ -80,6 +80,11 @@ export const audit =
 
    model: entry.model ?? null,
 
+   // Which weights answered, not just which name was asked for. A tag can be
+   // repointed; a digest cannot be, so this is what makes the model claim in
+   // the audit trail checkable rather than merely stated.
+   modelDigest: entry.modelDigest ?? null,
+
    endpoint: entry.endpoint ?? null,
 
    decision: entry.decision,

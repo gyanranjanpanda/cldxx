@@ -16,5 +16,9 @@ const conversationSchema =new mongoose.Schema({
  timestamps:true
 });
 
+// Exported so a second connection -- the on-prem store used in Sovereign Mode
+// -- can build the same model without redeclaring the shape.
+export { conversationSchema };
+
 const Conversation= mongoose.model("Conversation",conversationSchema);
 export default Conversation
