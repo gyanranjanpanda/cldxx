@@ -1,0 +1,10 @@
+{
+  "baseUrl": "http://127.0.0.1:11434/v1",
+  "runtime": "Ollama",
+  "models": [
+    "llava:7b",
+    "nomic-embed-text:latest",
+    "qwen2.5-coder:7b"
+  ],
+  "model": "qwen2.5-coder:7b"
+}
