@@ -15,11 +15,19 @@ import { generateDocument } from "../docgen/pipeline.js";
 import { storeArtifact }     from "../utils/storage.js";
 import { checkAgentLimit }  from "../config/agentRateLimit.js";
 import { deductCredits }    from "../utils/deductCredits.js";
+import { getCached, setCached } from "../utils/promptCache.js";
 
 const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
 export const pptAgent = async (state) => {
   try {
+
+    const cached = await getCached("ppt", state.prompt, state.sovereign === true);
+    if (cached) {
+      console.log("[pptAgent] cache hit:", state.prompt.slice(0, 60));
+      return { ...state, response: cached.response, artifacts: cached.artifacts, fromCache: true };
+    }
+
     await checkAgentLimit(state.userId, "ppt");
     await deductCredits(state.userId, "ppt");
 
@@ -33,9 +41,7 @@ export const pptAgent = async (state) => {
     const fileName = `ppt-${Date.now()}.pptx`;
     const downloadUrl = await storeArtifact(buffer, fileName, PPTX_MIME, state);
 
-    return {
-      ...state,
-      response: `
+    const pptResponse = `
 # ✅ Presentation Generated Successfully
 
 📊 **${meta.title}**
@@ -44,7 +50,16 @@ export const pptAgent = async (state) => {
 📥 [Download PPT](${downloadUrl})
 
 ⏳ Link expires in 24 hours.
-`.trim(),
+`.trim();
+
+    await setCached("ppt", state.prompt, state.sovereign === true, {
+      response: pptResponse,
+      artifacts: []
+    });
+
+    return {
+      ...state,
+      response: pptResponse,
     };
   } catch (error) {
     console.error("[pptAgent] Error:", error);
