@@ -1,5 +1,10 @@
 import { internalApi } from "../internalApi.js";
-import { openClient, listTools, callTool } from "./connect.js";
+import {
+  openClient,
+  listTools,
+  callTool,
+  LONG_CALL_TIMEOUT_MS
+} from "./connect.js";
 
 // Tool names are namespaced by server so two servers can both expose "search"
 // without colliding. Models are strict about the character set, hence the slug.
@@ -178,11 +183,23 @@ export class McpSession {
 
       const client = await this.clientFor(entry.server);
 
+      const toolDescription = [
+        entry.tool.name,
+        entry.tool.description
+      ].filter(Boolean).join(" ").toLowerCase();
+
+      // Rendering tools are jobs, not request/response CRUD operations. Use a
+      // longer deadline for them, while keeping ordinary MCP calls fast.
+      const timeoutMs = /render|video|animation|animate|manim|compile|export|transcod/.test(
+        toolDescription
+      ) ? LONG_CALL_TIMEOUT_MS : undefined;
+
       const result = await callTool(
         client,
         entry.tool.name,
         args,
-        entry.server.name
+        entry.server.name,
+        timeoutMs
       );
 
       return {

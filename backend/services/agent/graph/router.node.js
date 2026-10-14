@@ -85,7 +85,8 @@ if(!state.file && await wantsMcpTools(state.userId, state.prompt)){
 
         ...state,
 
-        agent:"chat"
+        agent:"chat",
+        mcpRequested:true
 
     };
 

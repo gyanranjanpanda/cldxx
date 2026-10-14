@@ -12,6 +12,11 @@ const CLIENT_INFO = {
 // A server that never answers would otherwise hold the whole chat request open.
 export const CONNECT_TIMEOUT_MS = Number(process.env.MCP_CONNECT_TIMEOUT_MS) || 12_000;
 export const CALL_TIMEOUT_MS    = Number(process.env.MCP_CALL_TIMEOUT_MS)    || 45_000;
+// Rendering, video generation and other compute tools legitimately take
+// longer than ordinary CRUD/search tools. A single global 45s deadline made
+// Manim render calls fail even when the remote server was still working.
+export const LONG_CALL_TIMEOUT_MS =
+  Number(process.env.MCP_LONG_CALL_TIMEOUT_MS) || 180_000;
 
 const pairsToObject = (pairs = []) =>
   pairs.reduce((out, pair) => {
@@ -20,13 +25,18 @@ const pairsToObject = (pairs = []) =>
     return out;
   }, {});
 
-const withTimeout = (promise, ms, label) =>
-  Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
-    )
-  ]);
+const withTimeout = (promise, ms, label) => {
+  let timer;
+
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${ms}ms`)),
+      ms
+    );
+  });
+
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+};
 
 // The args array is passed to the process directly -- no shell -- so argument
 // injection is not possible. A command string carrying shell syntax is still a
@@ -138,9 +148,15 @@ export const listTools = async (client, serverName) => {
 
 };
 
-export const callTool = async (client, name, args, serverName) =>
+export const callTool = async (
+  client,
+  name,
+  args,
+  serverName,
+  timeoutMs = CALL_TIMEOUT_MS
+) =>
   withTimeout(
     client.callTool({ name, arguments: args || {} }),
-    CALL_TIMEOUT_MS,
+    timeoutMs,
     `${serverName}.${name}`
   );
