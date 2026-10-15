@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  X, Plus, RefreshCw, Plug, Hammer, Trash2, Settings2, Check,
+  X, Plus, RefreshCw, Plug, Hammer, Trash2, Settings2, Check, MessageSquare,
   Loader2, AlertCircle, Globe, Terminal, Radio, ChevronLeft
 } from "lucide-react";
 import {
   getMcpServers, createMcpServer, updateMcpServer,
-  toggleMcpServer, deleteMcpServer, checkMcpHealth
+  toggleMcpServer, deleteMcpServer, checkMcpHealth, getMcpProviders, startMcpOAuth
 } from "../features/mcp.api";
 
 const TRANSPORTS = [
@@ -64,7 +64,7 @@ function PairEditor({ label, hint, pairs, onChange }) {
         <button
           type="button"
           onClick={() => onChange([...pairs, { key: "", value: "" }])}
-          className="text-[11px] font-medium text-indigo-400 hover:text-indigo-300 bg-transparent border-none cursor-pointer"
+          className="text-[11px] font-medium text-blue-400 hover:text-blue-300 bg-transparent border-none cursor-pointer"
         >
           + Add
         </button>
@@ -79,14 +79,14 @@ function PairEditor({ label, hint, pairs, onChange }) {
               value={pair.key}
               onChange={(e) => update(i, { key: e.target.value })}
               placeholder="Name"
-              className="w-[38%] px-2.5 h-[34px] rounded-lg bg-white/[0.04] border border-white/[0.08] outline-none text-[12.5px] text-slate-200 placeholder:text-slate-600 focus:border-indigo-500/40"
+              className="w-[38%] px-2.5 h-[34px] rounded-lg bg-white/[0.04] border border-white/[0.08] outline-none text-[12.5px] text-slate-200 placeholder:text-slate-600 focus:border-blue-500/40"
             />
             <input
               value={pair.value}
               onChange={(e) => update(i, { value: e.target.value })}
               type="password"
               placeholder={pair.hasValue ? "•••••• (unchanged)" : "Value"}
-              className="flex-1 min-w-0 px-2.5 h-[34px] rounded-lg bg-white/[0.04] border border-white/[0.08] outline-none text-[12.5px] text-slate-200 placeholder:text-slate-600 focus:border-indigo-500/40"
+              className="flex-1 min-w-0 px-2.5 h-[34px] rounded-lg bg-white/[0.04] border border-white/[0.08] outline-none text-[12.5px] text-slate-200 placeholder:text-slate-600 focus:border-blue-500/40"
             />
             <button
               type="button"
@@ -119,7 +119,7 @@ function ServerCard({ server, busy, onToggle, onCheck, onEdit, onDelete }) {
   return (
     <div className={`rounded-xl border p-3.5 transition-colors duration-150
       ${server.enabled
-        ? "bg-indigo-500/[0.06] border-indigo-500/20"
+        ? "bg-blue-500/[0.06] border-blue-500/20"
         : "bg-white/[0.02] border-white/[0.07]"}`}>
 
       <div className="flex items-start gap-2.5">
@@ -145,7 +145,7 @@ function ServerCard({ server, busy, onToggle, onCheck, onEdit, onDelete }) {
           disabled={busy}
           title={server.enabled ? "Enabled" : "Disabled"}
           className={`relative w-[34px] h-[19px] rounded-full shrink-0 border-none cursor-pointer transition-colors duration-150 disabled:opacity-50
-            ${server.enabled ? "bg-indigo-500" : "bg-white/[0.14]"}`}
+            ${server.enabled ? "bg-blue-500" : "bg-white/[0.14]"}`}
         >
           <span className={`absolute top-[2.5px] w-[14px] h-[14px] rounded-full bg-white transition-all duration-150
             ${server.enabled ? "left-[17px]" : "left-[2.5px]"}`} />
@@ -216,9 +216,10 @@ function ServerCard({ server, busy, onToggle, onCheck, onEdit, onDelete }) {
   );
 }
 
-export default function McpDrawer({ open, onClose }) {
+export default function McpDrawer({ open, onClose, oauthNotice }) {
 
   const [servers, setServers]           = useState([]);
+  const [providers, setProviders]       = useState([]);
   const [stdioAllowed, setStdioAllowed] = useState(false);
   const [loading, setLoading]           = useState(false);
   const [checkingId, setCheckingId]     = useState(null);
@@ -230,9 +231,13 @@ export default function McpDrawer({ open, onClose }) {
     setLoading(true);
     setError("");
     try {
-      const data = await getMcpServers();
+      const [data, providerList] = await Promise.all([
+        getMcpServers(),
+        getMcpProviders()
+      ]);
       setServers(data.servers || []);
       setStdioAllowed(Boolean(data.stdioAllowed));
+      setProviders(providerList);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -246,6 +251,10 @@ export default function McpDrawer({ open, onClose }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (open) load();
   }, [open, load]);
+
+  useEffect(() => {
+    if (oauthNotice?.status === "error") setError(oauthNotice.message);
+  }, [oauthNotice]);
 
   // Esc closes the form first, then the drawer -- closing the whole thing on a
   // half-filled form loses the work.
@@ -291,6 +300,17 @@ export default function McpDrawer({ open, onClose }) {
     } catch (err) {
       setError(errorMessage(err));
       load();
+    }
+  };
+
+  const handleProviderConnect = async (provider) => {
+    setError("");
+
+    try {
+      const url = await startMcpOAuth(provider.id);
+      window.location.assign(url);
+    } catch (err) {
+      setError(errorMessage(err));
     }
   };
 
@@ -399,7 +419,7 @@ export default function McpDrawer({ open, onClose }) {
                       value={draft.name}
                       onChange={(e) => setDraft({ ...draft, name: e.target.value })}
                       placeholder="My tools"
-                      className="w-full px-3 h-[38px] rounded-lg bg-white/[0.04] border border-white/[0.08] outline-none text-[13px] text-slate-200 placeholder:text-slate-600 focus:border-indigo-500/40"
+                      className="w-full px-3 h-[38px] rounded-lg bg-white/[0.04] border border-white/[0.08] outline-none text-[13px] text-slate-200 placeholder:text-slate-600 focus:border-blue-500/40"
                     />
                     <p className="text-[11px] text-slate-600">Used to namespace its tools, so keep it short.</p>
                   </div>
@@ -418,7 +438,7 @@ export default function McpDrawer({ open, onClose }) {
                             title={t.hint}
                             className={`flex items-center gap-2 px-3 h-[38px] rounded-lg border cursor-pointer text-[12.5px] font-medium transition-colors duration-150
                               ${active
-                                ? "bg-indigo-500/15 border-indigo-500/40 text-indigo-200"
+                                ? "bg-blue-500/15 border-blue-500/40 text-blue-200"
                                 : "bg-white/[0.03] border-white/[0.08] text-slate-400 hover:bg-white/[0.06]"}`}
                           >
                             <Icon size={13} />
@@ -442,7 +462,7 @@ export default function McpDrawer({ open, onClose }) {
                           value={draft.url}
                           onChange={(e) => setDraft({ ...draft, url: e.target.value })}
                           placeholder="https://mcp.example.com/mcp"
-                          className="w-full px-3 h-[38px] rounded-lg bg-white/[0.04] border border-white/[0.08] outline-none text-[13px] text-slate-200 placeholder:text-slate-600 focus:border-indigo-500/40"
+                          className="w-full px-3 h-[38px] rounded-lg bg-white/[0.04] border border-white/[0.08] outline-none text-[13px] text-slate-200 placeholder:text-slate-600 focus:border-blue-500/40"
                         />
                       </div>
 
@@ -461,7 +481,7 @@ export default function McpDrawer({ open, onClose }) {
                           value={draft.command}
                           onChange={(e) => setDraft({ ...draft, command: e.target.value })}
                           placeholder="npx"
-                          className="w-full px-3 h-[38px] rounded-lg bg-white/[0.04] border border-white/[0.08] outline-none text-[13px] text-slate-200 placeholder:text-slate-600 focus:border-indigo-500/40"
+                          className="w-full px-3 h-[38px] rounded-lg bg-white/[0.04] border border-white/[0.08] outline-none text-[13px] text-slate-200 placeholder:text-slate-600 focus:border-blue-500/40"
                         />
                       </div>
 
@@ -471,7 +491,7 @@ export default function McpDrawer({ open, onClose }) {
                           value={draft.args}
                           onChange={(e) => setDraft({ ...draft, args: e.target.value })}
                           placeholder="-y @modelcontextprotocol/server-filesystem /tmp"
-                          className="w-full px-3 h-[38px] rounded-lg bg-white/[0.04] border border-white/[0.08] outline-none text-[13px] text-slate-200 placeholder:text-slate-600 focus:border-indigo-500/40"
+                          className="w-full px-3 h-[38px] rounded-lg bg-white/[0.04] border border-white/[0.08] outline-none text-[13px] text-slate-200 placeholder:text-slate-600 focus:border-blue-500/40"
                         />
                         <p className="text-[11px] text-slate-600">Separated by spaces. The process runs on the agent host.</p>
                       </div>
@@ -489,7 +509,7 @@ export default function McpDrawer({ open, onClose }) {
                     <button
                       onClick={handleSave}
                       disabled={saving || !draft.name.trim()}
-                      className="flex items-center gap-2 text-[13px] font-medium text-white bg-indigo-600 hover:bg-indigo-500 px-4 h-[36px] rounded-lg border-none cursor-pointer disabled:opacity-50 transition-colors duration-150"
+                      className="flex items-center gap-2 text-[13px] font-medium text-white bg-blue-600 hover:bg-blue-500 px-4 h-[36px] rounded-lg border-none cursor-pointer disabled:opacity-50 transition-colors duration-150"
                     >
                       {saving && <Loader2 size={13} className="animate-spin" />}
                       {draft._id ? "Save changes" : "Add server"}
@@ -507,8 +527,8 @@ export default function McpDrawer({ open, onClose }) {
                 <div className="space-y-5">
 
                   <div className="flex items-center gap-3 rounded-xl bg-white/[0.03] border border-white/[0.07] px-4 py-3">
-                    <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 shrink-0">
-                      <Plug size={16} className="text-indigo-400" />
+                    <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 shrink-0">
+                      <Plug size={16} className="text-blue-400" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[13.5px] font-semibold text-slate-100">
@@ -516,6 +536,17 @@ export default function McpDrawer({ open, onClose }) {
                       </p>
                       <p className="text-[11.5px] text-slate-500">{enabledCount} enabled</p>
                     </div>
+
+                    {providers.map((provider) => (
+                      <button
+                        key={provider.id}
+                        onClick={() => handleProviderConnect(provider)}
+                        className="flex items-center gap-1.5 text-[12.5px] font-medium text-slate-200 bg-[#12345a] hover:bg-[#164e7a] px-3 h-[34px] rounded-lg border-none cursor-pointer transition-colors duration-150"
+                      >
+                        <MessageSquare size={13} />
+                        Connect {provider.name}
+                      </button>
+                    ))}
 
                     <button
                       onClick={() => runCheck(null)}
@@ -530,7 +561,7 @@ export default function McpDrawer({ open, onClose }) {
 
                     <button
                       onClick={() => setDraft(blankDraft())}
-                      className="flex items-center gap-1.5 text-[12.5px] font-medium text-white bg-indigo-600 hover:bg-indigo-500 px-3 h-[34px] rounded-lg border-none cursor-pointer transition-colors duration-150"
+                      className="flex items-center gap-1.5 text-[12.5px] font-medium text-white bg-blue-600 hover:bg-blue-500 px-3 h-[34px] rounded-lg border-none cursor-pointer transition-colors duration-150"
                     >
                       <Plus size={13} />
                       Add Server
@@ -549,7 +580,7 @@ export default function McpDrawer({ open, onClose }) {
                       <p className="text-[12.5px] text-slate-600">Add your own MCP servers with custom tools</p>
                       <button
                         onClick={() => setDraft(blankDraft())}
-                        className="flex items-center gap-1.5 mt-2 text-[13px] font-medium text-white bg-indigo-600 hover:bg-indigo-500 px-4 h-[36px] rounded-lg border-none cursor-pointer transition-colors duration-150"
+                        className="flex items-center gap-1.5 mt-2 text-[13px] font-medium text-white bg-blue-600 hover:bg-blue-500 px-4 h-[36px] rounded-lg border-none cursor-pointer transition-colors duration-150"
                       >
                         <Plus size={14} />
                         Add Your First Server

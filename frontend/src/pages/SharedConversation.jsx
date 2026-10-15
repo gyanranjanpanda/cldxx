@@ -128,8 +128,8 @@ export default function SharedConversation() {
     <div className="h-screen flex flex-col bg-[#0d0f14] text-white overflow-hidden">
 
       <div className="shrink-0 flex items-center gap-2.5 px-5 h-14 border-b border-white/[0.06]">
-        <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-indigo-500/10 border border-indigo-500/20 shrink-0">
-          <MessageSquare size={13} className="text-indigo-400" />
+        <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20 shrink-0">
+          <MessageSquare size={13} className="text-blue-400" />
         </div>
         <h1 className="text-[14px] font-semibold text-slate-100 tracking-tight truncate">
           {state.conversation?.title}
@@ -202,7 +202,7 @@ export default function SharedConversation() {
                 <button
                   onClick={handleSend}
                   disabled={!value.trim() || sending || exhausted}
-                  className="shrink-0 flex items-center justify-center w-8 h-8 rounded-xl border-none bg-indigo-600 text-white cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-indigo-500 transition-colors duration-150"
+                  className="shrink-0 flex items-center justify-center w-8 h-8 rounded-xl border-none bg-blue-600 text-white cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-blue-500 transition-colors duration-150"
                 >
                   {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                 </button>

@@ -230,7 +230,7 @@ export default function ApiKeysDrawer({ open, onClose }) {
                           ) : (
                             <button
                               onClick={() => setEntry({ provider: provider.id, value: "" })}
-                              className="shrink-0 text-[12px] font-medium text-indigo-400 hover:text-indigo-300 bg-transparent border-none cursor-pointer"
+                              className="shrink-0 text-[12px] font-medium text-blue-400 hover:text-blue-300 bg-transparent border-none cursor-pointer"
                             >
                               Add key
                             </button>
@@ -251,13 +251,13 @@ export default function ApiKeysDrawer({ open, onClose }) {
                                 if (e.key === "Enter") save(provider.id);
                                 if (e.key === "Escape") setEntry(null);
                               }}
-                              className="w-full rounded-lg bg-black/30 border border-white/[0.09] px-3 py-2 text-[13px] text-slate-200 outline-none focus:border-indigo-500/50"
+                              className="w-full rounded-lg bg-black/30 border border-white/[0.09] px-3 py-2 text-[13px] text-slate-200 outline-none focus:border-blue-500/50"
                             />
                             <div className="flex items-center gap-2">
                               <button
                                 disabled={saving || !entry.value.trim()}
                                 onClick={() => save(provider.id)}
-                                className="rounded-lg bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1.5 text-[12.5px] font-medium text-white border-none cursor-pointer"
+                                className="rounded-lg bg-blue-500 hover:bg-blue-400 disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1.5 text-[12.5px] font-medium text-white border-none cursor-pointer"
                               >
                                 {saving ? "Checking…" : "Save key"}
                               </button>

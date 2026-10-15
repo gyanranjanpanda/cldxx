@@ -84,7 +84,7 @@ export default multer({
 
     limits:{
 
-        fileSize:20*1024*1024
+        fileSize:(Number(process.env.MAX_UPLOAD_MB) || 20) * 1024 * 1024
 
     }
 

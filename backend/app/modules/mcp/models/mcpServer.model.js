@@ -41,6 +41,18 @@ const mcpServerSchema = new mongoose.Schema({
     maxlength: 60
   },
 
+  provider: {
+    type: String,
+    default: "custom",
+    trim: true
+  },
+
+  authType: {
+    type: String,
+    enum: ["none", "header", "oauth"],
+    default: "header"
+  },
+
   // "http" is Streamable HTTP, the current remote transport; "sse" is the older
   // one, kept because plenty of deployed servers still only speak it. "stdio"
   // is a local process the agent host spawns.

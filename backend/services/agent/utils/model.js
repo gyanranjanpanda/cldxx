@@ -52,6 +52,14 @@ const deepseek = (state, { maxTokens } = {}) =>
     ...(maxTokens ? { maxTokens } : {}),
   });
 
+const deepseekVision = (state) =>
+  new ChatDeepSeek({
+    apiKey: keyFor("deepseek", state),
+    model: process.env.DEEPSEEK_VISION_MODEL || "deepseek-flash",
+    temperature: 0,
+    maxTokens: Number(process.env.VISION_MAX_OUTPUT_TOKENS) || 1024,
+  });
+
 // `sovereign` is threaded in from the graph state rather than read from the
 // environment, because it is a property of the turn: the same deployment
 // answers an ordinary question from the cloud and a confidential one locally,
@@ -181,11 +189,16 @@ export const getModel =
      });
 
    case "vision":
-     if (deepseekConfigured(state)) return deepseek(state);
+     // DeepSeek Flash is multimodal. Use it when the deployment has a
+     // DeepSeek key; Gemini remains a working fallback for deployments that
+     // have not configured DeepSeek.
+     if (deepseekConfigured(state)) return deepseekVision(state);
 
      return new ChatGoogleGenerativeAI({
        model: "gemini-2.5-flash",
        apiKey: keyFor("google", state),
+       maxOutputTokens: Number(process.env.VISION_MAX_OUTPUT_TOKENS) || 1024,
+       temperature: 0,
      });
 
    // Not an agent the router can pick: the chat agent asks for this one only

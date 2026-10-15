@@ -67,6 +67,7 @@ export default function Sidebar() {
   const [imageError, setImageError]     = useState(false);
   const [showBilling, setShowBilling]   = useState(false);
   const [showMcp, setShowMcp]           = useState(false);
+  const [mcpNotice, setMcpNotice]       = useState(null);
   const [showKeys, setShowKeys]         = useState(false);
   // Only the count is kept here; the drawer owns the full list.
   const [mcpEnabled, setMcpEnabled]     = useState(0);
@@ -116,6 +117,23 @@ export default function Sidebar() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (userData?._id) refreshMcpCount();
   }, [userData?._id, refreshMcpCount]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("mcp");
+
+    if (!status) return;
+
+    setMcpNotice({
+      status,
+      message: params.get("message") || "MCP connection failed"
+    });
+    setShowMcp(true);
+
+    // OAuth is complete; remove its one-time status so a refresh does not
+    // reopen the drawer with a stale message.
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }, []);
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -234,7 +252,7 @@ export default function Sidebar() {
         >
           <Plug size={16} />
           {mcpEnabled > 0 && (
-            <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-indigo-400" />
+            <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-blue-400" />
           )}
         </button>
 
@@ -250,7 +268,7 @@ export default function Sidebar() {
           onClick={toggleIncognito}
           title={incognito ? "Incognito on — history off" : "Incognito chat"}
           className={`flex items-center justify-center w-9 h-9 rounded-xl transition-colors duration-150 border-none cursor-pointer
-            ${incognito ? "bg-fuchsia-500/15 text-fuchsia-300" : "bg-transparent text-slate-500 hover:bg-white/[0.05] hover:text-slate-200"}`}
+            ${incognito ? "bg-blue-500/15 text-blue-300" : "bg-transparent text-slate-500 hover:bg-white/[0.05] hover:text-slate-200"}`}
         >
           <Ghost size={16} />
         </button>
@@ -268,7 +286,7 @@ export default function Sidebar() {
               onClick={() => handlePickAgent(agent.id)}
               title={`${agent.label} — ${agent.blurb}`}
               className={`flex items-center justify-center w-9 h-9 rounded-xl transition-colors duration-150 border-none cursor-pointer
-                ${isActive ? "bg-indigo-500/15 text-indigo-400" : "bg-transparent text-slate-500 hover:bg-white/[0.05] hover:text-slate-300"}`}
+                ${isActive ? "bg-blue-500/15 text-blue-400" : "bg-transparent text-slate-500 hover:bg-white/[0.05] hover:text-slate-300"}`}
             >
               <Icon size={15} />
             </button>
@@ -286,7 +304,7 @@ export default function Sidebar() {
                 onClick={() => handleSelectConversation(chat)}
                 title={chat.title}
                 className={`flex items-center justify-center w-9 h-9 rounded-xl shrink-0 transition-colors duration-150 border-none cursor-pointer
-                  ${isActive ? "bg-indigo-500/15 text-indigo-400" : "bg-transparent text-slate-500 hover:bg-white/[0.05] hover:text-slate-300"}`}
+                  ${isActive ? "bg-blue-500/15 text-blue-400" : "bg-transparent text-slate-500 hover:bg-white/[0.05] hover:text-slate-300"}`}
               >
                 <MessageSquare size={15} />
               </button>
@@ -299,7 +317,7 @@ export default function Sidebar() {
             <div className="relative">
               {!userData.avatar || imageError
                 ? <div className="w-8 h-8 rounded-[8px] bg-white/[0.06] flex items-center justify-center"><User size={14} className="text-slate-400" /></div>
-                : <img src={userData.avatar} alt={userData.name} onError={() => setImageError(true)} className="w-8 h-8 rounded-[8px] object-cover border-2 border-indigo-500/25" />
+                : <img src={userData.avatar} alt={userData.name} onError={() => setImageError(true)} className="w-8 h-8 rounded-[8px] object-cover border-2 border-blue-500/25" />
               }
               <span className="absolute -bottom-px -right-px w-2 h-2 bg-green-500 rounded-full border-[1.5px] border-[#0d0f14] block" />
             </div>
@@ -406,11 +424,11 @@ export default function Sidebar() {
               title="Replies still work; nothing is written to your history"
               className={navRow(incognito)}
             >
-              <Ghost size={15} className={`shrink-0 ${incognito ? "text-fuchsia-300" : "text-slate-400"}`} />
+              <Ghost size={15} className={`shrink-0 ${incognito ? "text-blue-300" : "text-slate-400"}`} />
               <span className="flex-1">Incognito</span>
               {/* A switch rather than a label: this one is a mode, not a link */}
               <span className={`relative w-[26px] h-[15px] rounded-full transition-colors duration-150 shrink-0
-                ${incognito ? "bg-fuchsia-500/70" : "bg-white/[0.12]"}`}>
+                ${incognito ? "bg-blue-500/70" : "bg-white/[0.12]"}`}>
                 <span className={`absolute top-[2px] w-[11px] h-[11px] rounded-full bg-white transition-all duration-150
                   ${incognito ? "left-[13px]" : "left-[2px]"}`} />
               </span>
@@ -420,7 +438,7 @@ export default function Sidebar() {
               <Plug size={15} className="shrink-0 text-slate-400" />
               <span className="flex-1">MCP Servers</span>
               {mcpEnabled > 0 && (
-                <span className="text-[10px] font-semibold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-px rounded-full">
+                <span className="text-[10px] font-semibold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1.5 py-px rounded-full">
                   {mcpEnabled}
                 </span>
               )}
@@ -435,7 +453,7 @@ export default function Sidebar() {
             <button onClick={() => setAgentsOpen(o => !o)} className={navRow(false)}>
               <Sparkles size={15} className="shrink-0 text-slate-400" />
               <span className="flex-1">Agents</span>
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-indigo-400/90">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-blue-400/90">
                 {AGENTS.find(a => a.id === selectedAgent)?.label ?? "Auto"}
               </span>
               <ChevronDown
@@ -456,10 +474,10 @@ export default function Sidebar() {
                       title={agent.blurb}
                       className={`w-full flex items-center gap-2.5 px-3 h-[32px] rounded-[9px] text-[12.5px] font-medium border-none cursor-pointer text-left transition-colors duration-150
                         ${isActive
-                          ? "bg-indigo-500/10 text-indigo-300"
+                          ? "bg-blue-500/10 text-blue-300"
                           : "bg-transparent text-slate-400 hover:bg-white/[0.04] hover:text-slate-200"}`}
                     >
-                      <Icon size={14} className={`shrink-0 ${isActive ? "text-indigo-400" : "text-slate-500"}`} />
+                      <Icon size={14} className={`shrink-0 ${isActive ? "text-blue-400" : "text-slate-500"}`} />
                       {agent.label}
                     </button>
                   );
@@ -470,7 +488,7 @@ export default function Sidebar() {
             <button onClick={() => { setShowBilling(true); setMobileOpen(false); }} className={navRow(false)}>
               <CoinsIcon size={15} className="shrink-0 text-slate-400" />
               <span className="flex-1">Credits</span>
-              <span className="text-[10px] font-medium text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-px rounded-full tracking-wide">
+              <span className="text-[10px] font-medium text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1.5 py-px rounded-full tracking-wide">
                 {userData?.plan ?? "free"}
               </span>
             </button>
@@ -514,7 +532,7 @@ export default function Sidebar() {
                 <button
                   title="Share this chat"
                   onClick={(e) => { e.stopPropagation(); setSharing(chat); }}
-                  className={`flex shrink-0 items-center justify-center w-6 h-6 rounded-md border-none bg-transparent text-slate-600 cursor-pointer hover:bg-white/[0.08] hover:text-indigo-300 transition-all duration-150
+                  className={`flex shrink-0 items-center justify-center w-6 h-6 rounded-md border-none bg-transparent text-slate-600 cursor-pointer hover:bg-white/[0.08] hover:text-blue-300 transition-all duration-150
                     ${isHov || isActive ? "opacity-100" : "opacity-0"}`}
                 >
                   <Share2 size={12} />
@@ -571,7 +589,7 @@ export default function Sidebar() {
                     <img
                       src={userData.avatar}
                       alt={userData.name}
-                      className="w-8 h-8 rounded-full object-cover border-2 border-indigo-500/25"
+                      className="w-8 h-8 rounded-full object-cover border-2 border-blue-500/25"
                       onError={() => setImageError(true)}
                     />
                   )}
@@ -608,6 +626,7 @@ export default function Sidebar() {
 
       <McpDrawer
         open={showMcp}
+        oauthNotice={mcpNotice}
         onClose={() => { setShowMcp(false); refreshMcpCount(); }}
       />
 

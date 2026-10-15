@@ -11,7 +11,7 @@ function Home() {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-[#0d0f14] text-white">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-fuchsia-500 border-t-transparent" />
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
           <span className="text-xs text-slate-400">Loading cldxAI...</span>
         </div>
       </div>

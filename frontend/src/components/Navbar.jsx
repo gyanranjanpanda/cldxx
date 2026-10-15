@@ -15,16 +15,16 @@ export default function Navbar() {
       {/* Left — chat title */}
       <div className="flex items-center gap-2.5">
         <div className={`flex items-center justify-center w-7 h-7 rounded-lg border
-          ${incognito ? "bg-fuchsia-500/10 border-fuchsia-500/25" : "bg-indigo-500/10 border-indigo-500/20"}`}>
+          ${incognito ? "bg-blue-500/10 border-blue-500/25" : "bg-blue-500/10 border-blue-500/20"}`}>
           {incognito
-            ? <Ghost size={13} className="text-fuchsia-300" />
-            : <MessageSquare size={13} className="text-indigo-400" />}
+            ? <Ghost size={13} className="text-blue-300" />
+            : <MessageSquare size={13} className="text-blue-400" />}
         </div>
         <h2 className="text-[14px] font-semibold text-slate-100 tracking-tight">
           {incognito ? "Incognito chat" : selectedConversation?.title}
         </h2>
         {incognito && (
-          <span className="text-[10px] font-medium text-fuchsia-300 bg-fuchsia-500/10 border border-fuchsia-500/20 px-2 py-0.5 rounded-full">
+          <span className="text-[10px] font-medium text-blue-300 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full">
             Not saved
           </span>
         )}

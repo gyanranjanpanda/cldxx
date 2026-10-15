@@ -130,8 +130,8 @@ export default function ArtifactPanel() {
         </button>
 
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <div className="flex items-center justify-center w-6 h-6 rounded-md bg-indigo-500/10 border border-indigo-500/20 shrink-0">
-            <FiCode className="text-indigo-400" size={12} />
+          <div className="flex items-center justify-center w-6 h-6 rounded-md bg-blue-500/10 border border-blue-500/20 shrink-0">
+            <FiCode className="text-blue-400" size={12} />
           </div>
           <h2 className="text-[13px] font-medium text-slate-200 truncate">{artifact.title}</h2>
         </div>
@@ -153,14 +153,14 @@ export default function ArtifactPanel() {
               <button
                 onClick={() => setTab("code")}
                 className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors duration-150
-                  ${tab === "code" ? "bg-indigo-500 text-white" : "text-slate-500 hover:text-slate-200"}`}
+                  ${tab === "code" ? "bg-blue-500 text-white" : "text-slate-500 hover:text-slate-200"}`}
               >
                 <Code2 size={11} /> Code
               </button>
               <button
                 onClick={() => setTab("preview")}
                 className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors duration-150
-                  ${tab === "preview" ? "bg-indigo-500 text-white" : "text-slate-500 hover:text-slate-200"}`}
+                  ${tab === "preview" ? "bg-blue-500 text-white" : "text-slate-500 hover:text-slate-200"}`}
               >
                 <Eye size={11} /> Preview
               </button>
@@ -184,11 +184,11 @@ export default function ArtifactPanel() {
                 key={f.name}
                 onClick={() => setActiveFile(index)}
                 className={`px-4 py-2.5 text-[11px] font-medium whitespace-nowrap transition-colors duration-150 border-r border-white/[0.05] relative cursor-pointer bg-transparent
-                  ${activeFile === index ? "text-indigo-400" : "text-slate-500 hover:text-slate-300"}`}
+                  ${activeFile === index ? "text-blue-400" : "text-slate-500 hover:text-slate-300"}`}
               >
                 {f.name}
                 {activeFile === index && (
-                  <motion.div layoutId="filetab" className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-500 rounded-t-full" />
+                  <motion.div layoutId="filetab" className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-500 rounded-t-full" />
                 )}
               </button>
             ))}
@@ -225,7 +225,7 @@ export default function ArtifactPanel() {
                     </div>
                     <button
                       onClick={() => setRunId((n) => n + 1)}
-                      className="shrink-0 text-[11.5px] font-medium text-indigo-400 hover:text-indigo-300 bg-transparent border-none cursor-pointer"
+                      className="shrink-0 text-[11.5px] font-medium text-blue-400 hover:text-blue-300 bg-transparent border-none cursor-pointer"
                     >
                       Restart
                     </button>
@@ -259,7 +259,7 @@ export default function ArtifactPanel() {
     <>
       <button
         onClick={() => setMobileOpen(true)}
-        className="lg:hidden fixed bottom-24 right-4 z-40 flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[12px] font-medium shadow-lg shadow-indigo-500/20 border-none cursor-pointer transition-colors duration-150"
+        className="lg:hidden fixed bottom-24 right-4 z-40 flex items-center gap-2 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[12px] font-medium shadow-lg shadow-blue-500/20 border-none cursor-pointer transition-colors duration-150"
       >
         <FiCode size={13} />
         View Code

@@ -57,6 +57,11 @@ Annotation.Root({
  toolCalls:
  Annotation(),
 
+ // The router marks an explicit MCP request so the chat agent cannot silently
+ // replace a failed tool execution with an ordinary answer or generated code.
+ mcpRequested:
+ Annotation(),
+
  // Sovereign Mode has to survive the trip through the graph: LangGraph drops
  // keys that are not declared here, so without this line the flag set by the
  // controller would arrive at the agents as undefined and every turn would

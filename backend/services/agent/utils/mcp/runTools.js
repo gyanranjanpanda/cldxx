@@ -352,6 +352,9 @@ const readReply = (reply) => {
 
 };
 
+const isToolTimeout = (result) =>
+  result?.isError && /timed out after \d+ms/i.test(result.text || "");
+
 /**
  * Runs the model with the user's MCP tools bound, executing whatever it asks
  * for until it answers in plain text.
@@ -368,17 +371,26 @@ const readReply = (reply) => {
 export const runWithMcpTools = async ({ llm, messages, userId, state = {} }) => {
 
   let session = null;
+  const prompt = lastUserText(messages);
+  const explicitMcpRequest =
+    state.mcpRequested === true || /\bmcp\b/i.test(prompt);
 
   try {
 
     const { servers: available, stdioAllowed } = await fetchServers(userId);
 
     if (!available.length) {
+      if (explicitMcpRequest) {
+        return {
+          response: "I could not run the MCP request because no enabled MCP server is configured for this account.",
+          toolCalls: [],
+          mcpErrors: [{ server: "mcp", error: "No enabled MCP servers were found" }]
+        };
+      }
+
       const reply = await llm.invoke(messages);
       return { response: readReply(reply), toolCalls: [], mcpErrors: [] };
     }
-
-    const prompt = lastUserText(messages);
 
     // A "local" model is not a local turn if a tool ships the prompt out. A
     // remote MCP server receives whatever arguments the model passes it, so in
@@ -413,6 +425,16 @@ export const runWithMcpTools = async ({ llm, messages, userId, state = {} }) => 
     }
 
     if (!usable.length) {
+      if (explicitMcpRequest) {
+        return {
+          response: "I could not run the MCP request because the configured server uses a remote transport, which is unavailable in Sovereign Mode. Turn off Sovereign Mode or configure the server as local stdio.",
+          toolCalls: [],
+          mcpErrors: refused
+            ? [{ server: "mcp", error: `${refused} remote MCP server(s) are unavailable in Sovereign Mode` }]
+            : []
+        };
+      }
+
       const reply = await llm.invoke(messages);
       return {
         response: readReply(reply),
@@ -463,6 +485,16 @@ export const runWithMcpTools = async ({ llm, messages, userId, state = {} }) => 
     }
 
     if (!specs.length) {
+      if (explicitMcpRequest) {
+        return {
+          response: "I could not run the MCP request because the server was unreachable or exposed no tools. Open MCP Servers and run Health Check to see the connection error.",
+          toolCalls: [],
+          mcpErrors: errors.length
+            ? errors
+            : [{ server: "mcp", error: "No MCP tools were discovered" }]
+        };
+      }
+
       const reply = await llm.invoke(messages);
       return { response: readReply(reply), toolCalls: [], mcpErrors: errors };
     }
@@ -541,6 +573,22 @@ export const runWithMcpTools = async ({ llm, messages, userId, state = {} }) => 
           args:    call.args,
           isError: result.isError
         });
+
+        // Do not send a timeout back to the model as an ordinary tool result.
+        // Models commonly retry the same expensive render, which produced the
+        // two identical 45-second failures shown in the UI. The server is still
+        // allowed to finish its own job, but this turn ends with one truthful
+        // status instead of starting another render.
+        if (isToolTimeout(result)) {
+          return {
+            response: `The MCP tool ${call.name} exceeded its execution timeout. No result was returned.`,
+            toolCalls: executed,
+            mcpErrors: [
+              ...errors,
+              { server: call.name, error: result.text }
+            ]
+          };
+        }
 
         // A ToolMessage has to answer a tool_call the assistant turn actually
         // made. When the call was recovered from text there is no such id, and

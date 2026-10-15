@@ -170,6 +170,12 @@ export const wantsMcpTools = async (userId, prompt) => {
 
   if (!userId || !prompt) return false;
 
+  // An explicit MCP request must route to the MCP-capable chat agent even
+  // before a server has completed its first health check. Previously this
+  // check happened only after loading the cached vocabulary, so a newly added
+  // server with no cached tools could be treated as an ordinary coding request.
+  if (/\bmcp\b/i.test(String(prompt))) return true;
+
   try {
 
     const { words, phrases } = await loadVocabulary(userId);
@@ -177,10 +183,6 @@ export const wantsMcpTools = async (userId, prompt) => {
     if (!words.length && !phrases.length) return false;
 
     const text = String(prompt).toLowerCase();
-
-    // "use the mcp server" is explicit even without a name, but only counts
-    // for someone who actually has one configured.
-    if (/\bmcp\b/.test(text)) return true;
 
     if (phrases.some((phrase) => text.includes(phrase))) return true;
 

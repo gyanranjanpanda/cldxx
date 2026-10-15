@@ -14,9 +14,19 @@ import { generateDocument } from "../docgen/pipeline.js";
 import { storeArtifact }     from "../utils/storage.js";
 import { checkAgentLimit }   from "../config/agentRateLimit.js";
 import { deductCredits }     from "../utils/deductCredits.js";
+import { getCached, setCached } from "../utils/promptCache.js";
 
 export const pdfAgent = async (state) => {
   try {
+
+    // Cache check — same prompt = same PDF structure. Serve from Redis, skip
+    // the LLM + S3 upload entirely.
+    const cached = await getCached("pdf", state.prompt, state.sovereign === true);
+    if (cached) {
+      console.log("[pdfAgent] cache hit:", state.prompt.slice(0, 60));
+      return { ...state, response: cached.response, artifacts: cached.artifacts, fromCache: true };
+    }
+
     await checkAgentLimit(state.userId, "pdf");
     await deductCredits(state.userId, "pdf");
 
@@ -30,9 +40,7 @@ export const pdfAgent = async (state) => {
     const fileName = `pdf-${Date.now()}.pdf`;
     const downloadUrl = await storeArtifact(buffer, fileName, "application/pdf", state);
 
-    return {
-      ...state,
-      response: `
+    const pdfResponse = `
 # ✅ PDF Generated Successfully
 
 📄 **${meta.title}**
@@ -41,7 +49,16 @@ export const pdfAgent = async (state) => {
 📥 [Download PDF](${downloadUrl})
 
 ⏳ Link expires in 24 hours.
-`.trim(),
+`.trim();
+
+    await setCached("pdf", state.prompt, state.sovereign === true, {
+      response: pdfResponse,
+      artifacts: []
+    });
+
+    return {
+      ...state,
+      response: pdfResponse,
     };
   } catch (error) {
     console.error("[pdfAgent] Error:", error);

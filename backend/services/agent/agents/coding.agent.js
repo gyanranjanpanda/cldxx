@@ -3,6 +3,7 @@ import { checkAgentLimit } from "../config/agentRateLimit.js";
 import { deductCredits } from "../utils/deductCredits.js";
 import { getModel } from "../utils/model.js";
 import { runWithMcpTools } from "../utils/mcp/runTools.js";
+import { getCached, setCached } from "../utils/promptCache.js";
 
 function cleanCode(code = "") {
   return code
@@ -54,6 +55,25 @@ const buildSummary = (title, files) => {
 };
 
 export const codingAgent = async (state) => {
+
+  // ── Prompt cache check ────────────────────────────────────────────────────
+  // Check before touching credits or the LLM. A cache hit costs the user
+  // nothing and answers in milliseconds. Only CODE_GENERATION results are
+  // cached — review/debug/explain responses are conversation-specific and
+  // should not be served to a different user's context.
+  const cached = await getCached("coding", state.prompt, state.sovereign === true);
+
+  if (cached) {
+    console.log("[codingAgent] cache hit for prompt:", state.prompt.slice(0, 60));
+    return {
+      ...state,
+      response:  cached.response,
+      artifacts: cached.artifacts,
+      fromCache: true,
+      toolCalls: []
+    };
+  }
+
   await checkAgentLimit(state.userId, "coding");
   await deductCredits(state.userId, "coding");
 
@@ -336,23 +356,35 @@ Write complete, working code — this runs immediately with no edits.`;
     };
   }
 
+  const artifacts = [
+    {
+      id: Date.now(),
+      type: "project",
+      title: state.prompt,
+      files,
+      createdAt: new Date().toISOString()
+    }
+  ];
+
+  const generatedResponse = buildSummary(state.prompt, files);
+
+  // Write to cache after a successful CODE_GENERATION so the next identical
+  // prompt skips the LLM entirely. Review/explain/debug paths never reach
+  // here (they return above via the !content.includes("FILE:") branch).
+  await setCached("coding", state.prompt, state.sovereign === true, {
+    response:  generatedResponse,
+    artifacts
+  });
+
   return {
     ...state,
 
-    response: buildSummary(state.prompt, files),
+    response: generatedResponse,
 
     // Surfaced so the UI can show what the answer actually ran, matching the
     // chat agent.
     toolCalls: toolCalls || [],
 
-    artifacts: [
-      {
-        id: Date.now(),
-        type: "project",
-        title: state.prompt,
-        files,
-        createdAt: new Date().toISOString()
-      }
-    ]
+    artifacts
   };
 };

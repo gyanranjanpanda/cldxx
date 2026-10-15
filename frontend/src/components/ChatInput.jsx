@@ -16,6 +16,12 @@ import { useRef } from "react";
 const ACCEPTED_EXTENSIONS =
   /\.(pdf|docx|txt|md|markdown|csv|tsv|json|log|ya?ml|xml|html?)$/i;
 
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+// Vision quality is effectively unchanged for ordinary screenshots and photos
+// at this size, while the smaller payload uploads and becomes Base64 much faster.
+const IMAGE_COMPRESSION_THRESHOLD = 4 * 1024 * 1024;
+const MAX_IMAGE_DIMENSION = 2048;
+
 const isAcceptedFile = (file) =>
   Boolean(file) &&
   (file.type.startsWith("image/") ||
@@ -29,6 +35,34 @@ const defaultPromptFor = (file) => {
   if (file.type.startsWith("image/")) return "Describe this image.";
   return "Summarise this document.";
 };
+
+const compressImage = (file) => new Promise((resolve) => {
+  const image = new Image();
+  const objectUrl = URL.createObjectURL(file);
+
+  image.onload = () => {
+    const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(image.width, image.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.width * scale));
+    canvas.height = Math.max(1, Math.round(image.height * scale));
+    canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(objectUrl);
+
+    canvas.toBlob((blob) => {
+      if (!blob) return resolve(null);
+      resolve(new File([blob], `${file.name.replace(/\.[^.]+$/, "")}.jpg`, {
+        type: "image/jpeg",
+        lastModified: Date.now()
+      }));
+    }, "image/jpeg", 0.82);
+  };
+
+  image.onerror = () => {
+    URL.revokeObjectURL(objectUrl);
+    resolve(null);
+  };
+  image.src = objectUrl;
+});
 
 export default function ChatInput({
   setBanner
@@ -56,7 +90,7 @@ const [isDragging, setIsDragging] = useState(false);
 // depth counter is what keeps the overlay from flickering mid-drag.
 const dragDepth = useRef(0);
 
-const acceptFile = (file) => {
+const acceptFile = async (file) => {
   if (!file) return;
 
   if (!isAcceptedFile(file)) {
@@ -68,7 +102,25 @@ const acceptFile = (file) => {
     return;
   }
 
-  setSelectedFile(file);
+  if (file.size <= MAX_UPLOAD_BYTES) {
+    setSelectedFile(file);
+    return;
+  }
+
+  if (file.type.startsWith("image/") && file.size > IMAGE_COMPRESSION_THRESHOLD) {
+    const compressed = await compressImage(file);
+
+    if (compressed && compressed.size <= MAX_UPLOAD_BYTES) {
+      setSelectedFile(compressed);
+      return;
+    }
+  }
+
+  setBanner({
+    open: true,
+    title: "File too large",
+    message: "Files must be 20 MB or smaller. Large images are compressed automatically when possible."
+  });
 };
 
 const handleDrop = (e) => {
@@ -442,13 +494,13 @@ catch(error){
       <div
         className={`relative flex flex-col gap-2 border rounded-2xl px-4 pt-3.5 pb-3 transition-colors duration-150
           ${isDragging
-            ? "bg-indigo-500/[0.07] border-indigo-500/60"
+            ? "bg-blue-500/[0.07] border-blue-500/60"
             : "bg-white/[0.03] border-white/[0.07]"}`}
       >
 
         {isDragging && (
           <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-[#0d0f14]/85 backdrop-blur-sm pointer-events-none">
-            <div className="flex items-center gap-2 text-[13px] font-medium text-indigo-300">
+            <div className="flex items-center gap-2 text-[13px] font-medium text-blue-300">
               <Paperclip size={14} />
               Drop to attach — images, PDF, Word or text
             </div>
@@ -485,7 +537,7 @@ catch(error){
 
             ${
               isActive
-                ? "bg-gradient-to-r from-indigo-500 to-violet-600 text-white border-transparent shadow-[0_1px_8px_rgba(99,102,241,.35)]"
+                ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white border-transparent shadow-[0_1px_8px_rgba(99,102,241,.35)]"
                 : "bg-white/[0.03] text-slate-400 border-white/[0.06] hover:bg-white/[0.07]"
             }
           `}
@@ -542,7 +594,7 @@ size={16}
 className={
 selectedFile.type==="application/pdf"
 ? "text-red-400"
-: "text-indigo-400"
+: "text-blue-400"
 }
 
 />
@@ -702,7 +754,7 @@ isTranscribing
 
 ?
 
-"text-indigo-400"
+"text-blue-400"
 
 :
 
@@ -747,7 +799,7 @@ isListening
               ${isLoading
                 ? "bg-white text-[#0d0f14] hover:bg-slate-200"
                 : value.trim() || selectedFile
-                ? "bg-gradient-to-br from-indigo-500 to-violet-700 hover:opacity-90 text-white"
+                ? "bg-gradient-to-br from-blue-500 to-blue-700 hover:opacity-90 text-white"
                 : "bg-white/[0.05] text-slate-600 cursor-not-allowed"
               }`}
           >
