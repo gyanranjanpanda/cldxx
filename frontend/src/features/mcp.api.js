@@ -5,6 +5,11 @@ export const getMcpServers = async () => {
   return data;
 };
 
+export const getMcpProviders = async () => {
+  const { data } = await api.get("/api/mcp/providers");
+  return data.providers || [];
+};
+
 export const createMcpServer = async (payload) => {
   const { data } = await api.post("/api/mcp/servers", payload);
   return data.server;
@@ -30,4 +35,9 @@ export const deleteMcpServer = async (id) => {
 export const checkMcpHealth = async (serverId) => {
   const { data } = await api.post("/api/agent/mcp/health", { serverId });
   return data.results || [];
+};
+
+export const startMcpOAuth = async (provider) => {
+  const { data } = await api.get(`/api/mcp/oauth/${provider}/start`);
+  return data.url;
 };

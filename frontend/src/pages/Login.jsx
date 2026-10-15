@@ -35,7 +35,7 @@ function Login() {
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-[#0B0F19]">
 
-      {/* Tunnel backdrop — deep slate navy receding into indigo at the walls. Kept well
+      {/* Tunnel backdrop — deep slate navy receding into blue at the walls. Kept well
           below mid-luminance so the page stays comfortable on a dark room. */}
       <div
         className="absolute inset-0"
@@ -100,7 +100,7 @@ function Login() {
           </button>
 
           {error && (
-            <p className="mt-3 text-center text-[12px] text-indigo-300">{error}</p>
+            <p className="mt-3 text-center text-[12px] text-blue-300">{error}</p>
           )}
 
           <p className="mt-6 text-center text-[11px] leading-relaxed text-slate-600">

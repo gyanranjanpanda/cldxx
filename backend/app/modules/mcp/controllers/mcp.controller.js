@@ -1,4 +1,8 @@
+import crypto from "node:crypto";
+import axios from "axios";
+import redis from "../../../../shared/redis/redis.js";
 import McpServer from "../models/mcpServer.model.js";
+import { getProvider, listProviders } from "../providers.js";
 import {
   encryptPairs,
   decryptPairs,
@@ -19,11 +23,52 @@ export const stdioAllowed = () =>
    process.env.MCP_ALLOW_STDIO !== "false");
 
 const MAX_SERVERS_PER_USER = 20;
+const OAUTH_STATE_TTL_SECONDS = 600;
+
+const frontendUrl = () => process.env.FRONTEND_URL || "http://localhost:5173";
+
+const providerRedirectUrl = (provider) => {
+  const configured = process.env[`${provider.id.toUpperCase()}_REDIRECT_URI`]
+    || (provider.id === "slack" ? process.env.SLACK_REDIRECT_URI : "");
+
+  if (configured) return configured;
+
+  const base = process.env.PUBLIC_URL || process.env.APP_URL;
+
+  if (!base) {
+    throw new Error(
+      `Set ${provider.id.toUpperCase()}_REDIRECT_URI to the public callback URL`
+    );
+  }
+
+  return `${base.replace(/\/$/, "")}/api/mcp/oauth/${provider.id}/callback`;
+};
+
+const oauthStateKey = (provider, state) => `mcp-oauth:${provider.id}:${state}`;
+
+const oauthToken = (data, provider) => {
+  const value = (provider.tokenField || "access_token")
+    .split(".")
+    .reduce((current, key) => current?.[key], data);
+
+  return value || data?.authed_user?.access_token || data?.access_token;
+};
+
+const oauthRedirect = (res, status, message = "") => {
+  const params = new URLSearchParams({ mcp: status });
+  if (message) params.set("message", message);
+  return res.redirect(`${frontendUrl().replace(/\/$/, "")}/?${params}`);
+};
+
+export const listMcpProviders = (_req, res) =>
+  res.json({ success: true, providers: listProviders() });
 
 // The browser gets names and state; secret values stay on the server.
 const toClient = (doc) => ({
   _id:       doc._id,
   name:      doc.name,
+  provider:  doc.provider || "custom",
+  authType:  doc.authType || "header",
   transport: doc.transport,
   url:       doc.url,
   command:   doc.command,
@@ -192,6 +237,158 @@ export const listServers = async (req, res) => {
   }
 
 };
+
+export const startMcpOAuth = async (req, res) => {
+
+  try {
+
+    const provider = getProvider(req.params.provider);
+
+    if (!provider) {
+      return res.status(404).json({ success: false, message: "Unknown MCP provider" });
+    }
+
+    const clientId = process.env[`${provider.id.toUpperCase()}_CLIENT_ID`];
+    const clientSecret = process.env[`${provider.id.toUpperCase()}_CLIENT_SECRET`];
+
+    if (!clientId || !clientSecret) {
+      return res.status(503).json({
+        success: false,
+        message: `${provider.name} OAuth is not configured. Set ${provider.id.toUpperCase()}_CLIENT_ID and ${provider.id.toUpperCase()}_CLIENT_SECRET.`
+      });
+    }
+
+    const userId = String(req.headers["x-user-id"] || "");
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const state = crypto.randomBytes(32).toString("hex");
+
+    await redis.set(
+      oauthStateKey(provider, state),
+      JSON.stringify({ userId }),
+      "EX",
+      OAUTH_STATE_TTL_SECONDS
+    );
+
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: providerRedirectUrl(provider),
+      state,
+      scope: process.env[`${provider.id.toUpperCase()}_OAUTH_SCOPES`]
+        || provider.scopes.join(provider.scopeSeparator || ",")
+    });
+
+    return res.json({
+      success: true,
+      url: `${provider.authorizeUrl}?${params}`
+    });
+
+  } catch (error) {
+
+    return res.status(500).json({ success: false, message: error.message });
+
+  }
+
+};
+
+export const mcpOAuthCallback = async (req, res) => {
+
+  try {
+
+    const { code, state, error } = req.query;
+    const provider = getProvider(req.params.provider);
+
+    if (!provider) return oauthRedirect(res, "error", "Unknown MCP provider");
+
+    if (error) return oauthRedirect(res, "error", `${provider.name} authorization was cancelled`);
+
+    if (!code || !state) {
+      return oauthRedirect(res, "error", `${provider.name} returned an invalid OAuth response`);
+    }
+
+    const stored = await redis.get(oauthStateKey(provider, state));
+    await redis.del(oauthStateKey(provider, state));
+
+    if (!stored) {
+      return oauthRedirect(res, "error", `${provider.name} OAuth session expired. Please try again`);
+    }
+
+    const { userId } = JSON.parse(stored);
+    const body = new URLSearchParams({
+      client_id: process.env[`${provider.id.toUpperCase()}_CLIENT_ID`],
+      client_secret: process.env[`${provider.id.toUpperCase()}_CLIENT_SECRET`],
+      code,
+      redirect_uri: providerRedirectUrl(provider)
+    });
+
+    const { data } = await axios.post(
+      provider.tokenUrl,
+      body.toString(),
+      { headers: { "content-type": "application/x-www-form-urlencoded" } }
+    );
+
+    if (data?.ok === false) {
+      return oauthRedirect(res, "error", `${provider.name} token exchange failed`);
+    }
+
+    const accessToken = oauthToken(data, provider);
+
+    if (!accessToken) {
+      return oauthRedirect(res, "error", `${provider.name} did not return a user access token`);
+    }
+
+    const headers = encryptPairs([
+      { key: "Authorization", value: `Bearer ${accessToken}` }
+    ]);
+
+    const existing = await McpServer.findOne({ userId, name: provider.name });
+
+    if (existing) {
+      existing.transport = "http";
+      existing.provider = provider.id;
+      existing.authType = "oauth";
+      existing.url = provider.mcpUrl;
+      existing.headers = headers;
+      existing.enabled = true;
+      existing.status = { state: "unknown", toolCount: 0 };
+      existing.tools = [];
+      await existing.save();
+    } else {
+      const count = await McpServer.countDocuments({ userId });
+
+      if (count >= MAX_SERVERS_PER_USER) {
+        return oauthRedirect(res, "error", "Your MCP server limit has been reached");
+      }
+
+      await McpServer.create({
+        userId,
+        name: provider.name,
+        provider: provider.id,
+        authType: "oauth",
+        transport: "http",
+        url: provider.mcpUrl,
+        headers,
+        enabled: true
+      });
+    }
+
+    return oauthRedirect(res, "connected");
+
+  } catch (error) {
+
+    console.error(`[mcp] ${req.params.provider} OAuth callback failed:`, error.message);
+    return oauthRedirect(res, "error", `${req.params.provider} connection failed. Check the server logs`);
+
+  }
+
+};
+
+// Backward-compatible names for callers from the first Slack-only release.
+export const startSlackOAuth = startMcpOAuth;
+export const slackOAuthCallback = mcpOAuthCallback;
 
 export const createServer = async (req, res) => {
 
@@ -364,6 +561,8 @@ export const getServersForAgent = async (req, res) => {
       servers: servers.map((doc) => ({
         _id:       doc._id,
         name:      doc.name,
+        provider:  doc.provider || "custom",
+        authType:  doc.authType || "header",
         transport: doc.transport,
         url:       doc.url,
         command:   doc.command,

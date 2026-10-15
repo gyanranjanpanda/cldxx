@@ -50,7 +50,7 @@ const MOODS = [
     id: "evening",
     range: [17, 22],
     icon: Sunset,
-    accent: "from-orange-300 via-rose-300 to-fuchsia-300",
+    accent: "from-blue-300 via-sky-300 to-cyan-300",
     iconColor: "text-rose-300",
     lines: [
       "Winding down or just getting started?",
@@ -63,8 +63,8 @@ const MOODS = [
     id: "night",
     range: [22, 5],
     icon: Moon,
-    accent: "from-indigo-300 via-violet-300 to-fuchsia-300",
-    iconColor: "text-violet-300",
+    accent: "from-blue-300 via-blue-300 to-blue-300",
+    iconColor: "text-blue-300",
     lines: [
       "Burning the midnight oil?",
       "Late one. What are we working on?",
@@ -78,8 +78,8 @@ const MOODS = [
 const FALLBACK = {
   id: "default",
   icon: Star,
-  accent: "from-indigo-300 via-violet-300 to-fuchsia-300",
-  iconColor: "text-indigo-300",
+  accent: "from-blue-300 via-blue-300 to-blue-300",
+  iconColor: "text-blue-300",
   lines: ["Ready when you are."]
 };
 

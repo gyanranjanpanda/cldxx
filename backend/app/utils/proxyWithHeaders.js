@@ -1,11 +1,19 @@
 import proxy from "express-http-proxy";
 
+// express-http-proxy defaults to a 1 MB body limit. That silently rejected
+// multipart uploads before they could reach Multer, whose limit is larger.
+// Keep the gateway slightly above the file limit for multipart boundaries and
+// the text fields that accompany the file.
 export const proxyWithUser =
 (serviceUrl)=>{
+
+ const maxUploadMb = Number(process.env.MAX_UPLOAD_MB) || 20;
 
  return proxy(
   serviceUrl,
   {
+
+   limit: `${maxUploadMb + 2}mb`,
 
    proxyReqOptDecorator:
    (proxyReqOpts, srcReq)=>{

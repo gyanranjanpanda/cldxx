@@ -12,6 +12,7 @@ if (typeof globalThis.Path2D === 'undefined') {
 }
 
 import express from "express";
+import multer from "multer";
 import connectDB from "./config/db.js";
 import router from "./routes/agent.route.js";
 import { readArtifact, startArtifactSweeper } from "./utils/storage.js";
@@ -80,6 +81,24 @@ app.use("/",router);
 app.use((err, req, res, next) => {
 
   console.error(err);
+
+  if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+    const maxMb = Number(process.env.MAX_UPLOAD_MB) || 20;
+
+    return res.status(413).json({
+      success: false,
+      title: "File too large",
+      message: `This upload is larger than the ${maxMb} MB limit. Compress the image or choose a smaller document.`
+    });
+  }
+
+  if (err.message?.startsWith("Unsupported file type")) {
+    return res.status(415).json({
+      success: false,
+      title: "Unsupported file",
+      message: err.message
+    });
+  }
 
   // A policy refusal is a decision, not a fault. 403 keeps it out of the error
   // budget and tells the browser it is safe to show the reason verbatim.

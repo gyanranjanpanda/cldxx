@@ -25,7 +25,7 @@ function NeuralPulse() {
         />
       ))}
       <motion.span
-        className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-cyan-300 to-violet-400"
+        className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-cyan-300 to-blue-400"
         style={{ boxShadow: "0 0 14px rgba(125,211,252,0.55)" }}
         animate={{ scale: [1, 1.25, 1] }}
         transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
@@ -152,8 +152,8 @@ if (latestArtifactMessage) {
     <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 space-y-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {isEmpty && incognito ? (
         <div className="h-full flex flex-col items-center justify-center gap-3 text-center select-none">
-          <div className="flex items-center justify-center w-11 h-11 rounded-2xl bg-fuchsia-500/10 border border-fuchsia-500/20">
-            <Ghost size={21} className="text-fuchsia-300" strokeWidth={1.5} />
+          <div className="flex items-center justify-center w-11 h-11 rounded-2xl bg-blue-500/10 border border-blue-500/20">
+            <Ghost size={21} className="text-blue-300" strokeWidth={1.5} />
           </div>
           <h1 className="text-[26px] sm:text-[30px] font-semibold tracking-tight leading-snug text-slate-100">
             Incognito chat

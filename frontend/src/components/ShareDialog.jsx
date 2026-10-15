@@ -204,8 +204,8 @@ export default function ShareDialog({ open, onClose, conversation }) {
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5 [scrollbar-width:thin]">
 
               {freshLink ? (
-                <div className="rounded-xl bg-indigo-500/[0.08] border border-indigo-500/25 p-4 space-y-2.5">
-                  <p className="text-[13px] font-semibold text-indigo-200">Link ready</p>
+                <div className="rounded-xl bg-blue-500/[0.08] border border-blue-500/25 p-4 space-y-2.5">
+                  <p className="text-[13px] font-semibold text-blue-200">Link ready</p>
                   <div className="flex items-center gap-2">
                     <input
                       readOnly
@@ -268,10 +268,10 @@ export default function ShareDialog({ open, onClose, conversation }) {
                           onClick={() => setMode(option.id)}
                           className={`w-full flex items-start gap-3 px-3.5 py-3 rounded-xl border text-left cursor-pointer transition-colors duration-150
                             ${active
-                              ? "bg-indigo-500/[0.10] border-indigo-500/35"
+                              ? "bg-blue-500/[0.10] border-blue-500/35"
                               : "bg-white/[0.03] border-white/[0.07] hover:bg-white/[0.06]"}`}
                         >
-                          <Icon size={15} className={`shrink-0 mt-0.5 ${active ? "text-indigo-300" : "text-slate-500"}`} />
+                          <Icon size={15} className={`shrink-0 mt-0.5 ${active ? "text-blue-300" : "text-slate-500"}`} />
                           <span className="flex-1 min-w-0">
                             <span className={`block text-[13px] font-medium ${active ? "text-slate-100" : "text-slate-300"}`}>
                               {option.label}
@@ -279,7 +279,7 @@ export default function ShareDialog({ open, onClose, conversation }) {
                             <span className="block text-[11.5px] text-slate-500 mt-0.5">{option.blurb}</span>
                           </span>
                           <span className={`shrink-0 w-4 h-4 rounded-full border mt-0.5
-                            ${active ? "border-indigo-400 bg-indigo-500" : "border-white/20"}`} />
+                            ${active ? "border-blue-400 bg-blue-500" : "border-white/20"}`} />
                         </button>
                       );
                     })}
@@ -294,7 +294,7 @@ export default function ShareDialog({ open, onClose, conversation }) {
                           onClick={() => setHours(choice.hours)}
                           className={`h-[34px] rounded-lg border text-[12.5px] font-medium cursor-pointer transition-colors duration-150
                             ${hours === choice.hours
-                              ? "bg-indigo-500/15 border-indigo-500/40 text-indigo-200"
+                              ? "bg-blue-500/15 border-blue-500/40 text-blue-200"
                               : "bg-white/[0.03] border-white/[0.07] text-slate-400 hover:bg-white/[0.06]"}`}
                         >
                           {choice.label}
@@ -315,7 +315,7 @@ export default function ShareDialog({ open, onClose, conversation }) {
                           max="200"
                           value={allowance}
                           onChange={(e) => setAllowance(e.target.value)}
-                          className="w-[90px] px-3 h-[36px] rounded-lg bg-white/[0.04] border border-white/[0.08] outline-none text-[13px] text-slate-200 focus:border-indigo-500/40"
+                          className="w-[90px] px-3 h-[36px] rounded-lg bg-white/[0.04] border border-white/[0.08] outline-none text-[13px] text-slate-200 focus:border-blue-500/40"
                         />
                         <span className="text-[11.5px] text-slate-500">
                           messages, then the link becomes read-only. Replies run on your credits.
@@ -327,7 +327,7 @@ export default function ShareDialog({ open, onClose, conversation }) {
                   <button
                     onClick={handleCreate}
                     disabled={creating || !conversationId}
-                    className="w-full flex items-center justify-center gap-2 text-[13px] font-medium text-white bg-indigo-600 hover:bg-indigo-500 h-[38px] rounded-lg border-none cursor-pointer disabled:opacity-50 transition-colors duration-150"
+                    className="w-full flex items-center justify-center gap-2 text-[13px] font-medium text-white bg-blue-600 hover:bg-blue-500 h-[38px] rounded-lg border-none cursor-pointer disabled:opacity-50 transition-colors duration-150"
                   >
                     {creating ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />}
                     Create link
