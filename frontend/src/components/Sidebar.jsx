@@ -20,6 +20,13 @@ import { getMcpServers } from "../features/mcp.api";
 
 const DAY = 86_400_000;
 
+const mcpReturnNotice = () => {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  const status = params.get("mcp");
+  return status ? { status, message: params.get("message") || "MCP connection failed" } : null;
+};
+
 // ChatGPT buckets its history by age rather than showing one flat list, which
 // is what makes a long sidebar scannable. Conversations only carry timestamps,
 // so the grouping is derived here instead of asking the API for it.
@@ -66,8 +73,9 @@ export default function Sidebar() {
   const [mobileOpen, setMobileOpen]     = useState(false);
   const [imageError, setImageError]     = useState(false);
   const [showBilling, setShowBilling]   = useState(false);
-  const [showMcp, setShowMcp]           = useState(false);
-  const [mcpNotice, setMcpNotice]       = useState(null);
+  const initialMcpNotice = useMemo(() => mcpReturnNotice(), []);
+  const [showMcp, setShowMcp]           = useState(Boolean(initialMcpNotice));
+  const mcpNotice = initialMcpNotice;
   const [showKeys, setShowKeys]         = useState(false);
   // Only the count is kept here; the drawer owns the full list.
   const [mcpEnabled, setMcpEnabled]     = useState(0);
@@ -101,7 +109,7 @@ export default function Sidebar() {
       }
     };
     fetchConversations();
-  }, [userData?._id]);
+  }, [userData?._id, dispatch]);
 
   const refreshMcpCount = useCallback(async () => {
     try {
@@ -119,21 +127,11 @@ export default function Sidebar() {
   }, [userData?._id, refreshMcpCount]);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const status = params.get("mcp");
-
-    if (!status) return;
-
-    setMcpNotice({
-      status,
-      message: params.get("message") || "MCP connection failed"
-    });
-    setShowMcp(true);
-
+    if (!initialMcpNotice) return;
     // OAuth is complete; remove its one-time status so a refresh does not
     // reopen the drawer with a stale message.
     window.history.replaceState({}, document.title, window.location.pathname);
-  }, []);
+  }, [initialMcpNotice]);
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -485,13 +483,13 @@ export default function Sidebar() {
               </div>
             )}
 
-            <button onClick={() => { setShowBilling(true); setMobileOpen(false); }} className={navRow(false)}>
+            {import.meta.env.VITE_BILLING_ENABLED !== "false" && <button onClick={() => { setShowBilling(true); setMobileOpen(false); }} className={navRow(false)}>
               <CoinsIcon size={15} className="shrink-0 text-slate-400" />
               <span className="flex-1">Credits</span>
               <span className="text-[10px] font-medium text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1.5 py-px rounded-full tracking-wide">
                 {userData?.plan ?? "free"}
               </span>
-            </button>
+            </button>}
           </div>
 
           <div className="mx-2.5 mt-3 h-px bg-white/[0.06]" />
@@ -617,7 +615,8 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <BillingDrawer open={showBilling} onClose={() => setShowBilling(false)} />
+      {import.meta.env.VITE_BILLING_ENABLED !== "false" &&
+        <BillingDrawer open={showBilling} onClose={() => setShowBilling(false)} />}
 
       <ApiKeysDrawer
         open={showKeys}

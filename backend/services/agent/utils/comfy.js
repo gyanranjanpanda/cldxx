@@ -11,7 +11,7 @@ import axios from "axios";
 // here would mean a restarted notebook could only be picked up by restarting
 // this service too.
 export const comfyUrl = () =>
- String(process.env.COMFY_URL || "")
+ String(process.env.COMFY_API_URL || process.env.COMFY_URL || "")
   .trim()
   .replace(/\/+$/, "");
 
@@ -21,16 +21,32 @@ export const comfyConfigured = () =>
 const __dirname =
  path.dirname(fileURLToPath(import.meta.url));
 
-// The exported workflow lives at the repo root, which is four levels up from
-// backend/services/agent/utils. Overridable because a container image may lay
-// the tree out differently.
-const workflowPath = () =>
- process.env.COMFY_WORKFLOW ||
- path.join(
-  __dirname,
-  "..", "..", "..", "..",
-  "workflow_api.json"
- );
+const defaultWorkflowPath = path.join(
+ __dirname,
+ "..", "config",
+ "z_image_turbo_api.json"
+);
+
+const fallbackWorkflowPath = path.join(
+ __dirname,
+ "..", "..", "..", "..",
+ "workflow_api.json"
+);
+
+// Resolves the API-format ComfyUI workflow graph.
+// Prioritizes config/z_image_turbo_api.json, then falls back to repo root.
+const workflowPath = async () => {
+ if (process.env.COMFY_WORKFLOW) return process.env.COMFY_WORKFLOW;
+ const configStamp = await stat(defaultWorkflowPath).catch(() => null);
+ if (configStamp) return defaultWorkflowPath;
+ return fallbackWorkflowPath;
+};
+
+// Required header for all requests to ComfyUI over ngrok to bypass the free-tier
+// interstitial browser warning page which corrupts JSON responses and images.
+const COMFY_HEADERS = {
+ "ngrok-skip-browser-warning": "true"
+};
 
 // The server is reachable over a public tunnel that answers slowly when the
 // notebook is cold, so "offline" has to mean "did not answer", not "took a
@@ -119,6 +135,7 @@ export const health = async () => {
 
  await axios
   .get(`${base}/system_stats`, {
+   headers: COMFY_HEADERS,
    timeout: HEALTH_TIMEOUT_MS
   })
   .catch((error) => {
@@ -139,7 +156,7 @@ let cached = null;
 
 const loadWorkflow = async () => {
 
- const file = workflowPath();
+ const file = await workflowPath();
 
  const stamp = await stat(file).catch(() => null);
 
@@ -447,7 +464,13 @@ export const queuePrompt = async (graph) => {
   .post(
    `${base}/prompt`,
    { prompt: graph },
-   { timeout: QUEUE_TIMEOUT_MS }
+   {
+    headers: {
+     ...COMFY_HEADERS,
+     "Content-Type": "application/json"
+    },
+    timeout: QUEUE_TIMEOUT_MS
+   }
   )
   .catch((error) => {
 
@@ -483,7 +506,10 @@ export const fetchOutputs = async (promptId) => {
  const { data } = await axios
   .get(
    `${base}/history/${encodeURIComponent(promptId)}`,
-   { timeout: HISTORY_TIMEOUT_MS }
+   {
+    headers: COMFY_HEADERS,
+    timeout: HISTORY_TIMEOUT_MS
+   }
   )
   .catch((error) => {
 
@@ -563,6 +589,7 @@ export const fetchImage = async ({
     subfolder: subfolder || "",
     type: type || "output"
    },
+   headers: COMFY_HEADERS,
    responseType: "arraybuffer",
    timeout: IMAGE_TIMEOUT_MS
   })

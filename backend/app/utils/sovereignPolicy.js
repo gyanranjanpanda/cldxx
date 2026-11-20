@@ -21,7 +21,7 @@ const cacheKey = (userId) => `sov-policy:v1:${userId}`;
 
 export const getSovereignPolicy = async (userId) => {
 
-  if (!userId) return DEFAULT_POLICY;
+  if (!userId) throw new Error("Authenticated user id is required for sovereign policy lookup");
 
   try {
 
@@ -31,7 +31,8 @@ export const getSovereignPolicy = async (userId) => {
 
     const user = await User.findById(userId).select("sovereignPolicy").lean();
 
-    const policy = user?.sovereignPolicy || DEFAULT_POLICY;
+    if (!user) throw new Error("User record is unavailable for sovereign policy lookup");
+    const policy = user.sovereignPolicy || DEFAULT_POLICY;
 
     await redis.set(cacheKey(userId), policy, "EX", CACHE_TTL);
 
@@ -39,14 +40,8 @@ export const getSovereignPolicy = async (userId) => {
 
   } catch (error) {
 
-    // Failing open here would mean a lookup error silently downgrades an
-    // organisation from sovereign_only to user_choice, which is the one
-    // outcome this control exists to prevent. The safe default is the
-    // strictest thing we can assert without knowing: leave the decision to the
-    // agent's own fail-closed checks and say nothing.
     console.error("[policy] sovereign policy lookup failed:", error.message);
-
-    return DEFAULT_POLICY;
+    throw error;
 
   }
 
@@ -59,10 +54,11 @@ export const forgetSovereignPolicy = (userId) => redis.del(cacheKey(userId));
  * Express middleware: resolves the caller's policy onto the request so the
  * proxy decorator, which is synchronous, can put it on a header.
  */
-export const withSovereignPolicy = async (req, _res, next) => {
-
-  req.sovereignPolicy = await getSovereignPolicy(req.user?.userId);
-
-  next();
-
+export const withSovereignPolicy = async (req, res, next) => {
+  try {
+    req.sovereignPolicy = await getSovereignPolicy(req.user?.userId);
+    next();
+  } catch {
+    res.status(503).json({ message: "Sovereign policy is unavailable. Request refused." });
+  }
 };

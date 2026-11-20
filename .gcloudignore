@@ -1,0 +1,14 @@
+.git/
+**/node_modules/
+**/.env
+**/.env.*
+**/serviceAccount.json
+**/uploads/
+**/logs/
+**/audit/
+**/artifacts/
+**/temp/
+**/dist/
+*.log
+*.log.*
+.DS_Store

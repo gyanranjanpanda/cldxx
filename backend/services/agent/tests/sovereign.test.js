@@ -11,6 +11,7 @@ import {
   assertSovereignReady,
   assertAgentAllowed,
   assertModelCapable,
+  assertRedisLocal,
   modelSupports,
   CLOUD_ONLY_AGENTS
 } from "../utils/sovereign.js";
@@ -106,25 +107,39 @@ test("a cold cache does not pull restricted turns into the cloud tier", async ()
   // The subtle one. Each tier is a cache of a different store, and hydrating
   // the cloud tier from a merged source put restricted turns exactly where a
   // cloud model reads them -- invisibly, because it only happens once the
-  // cache has expired. Asserted at the boundary the agent actually calls.
-  // A real conversation id, because the hydration path talks to Mongo and an
-  // id that is not an ObjectId would exercise a different branch entirely.
-  const id = Date.now().toString(16).padStart(24, "0").slice(-24);
+  // cache has expired.
+  //
+  // Using an "incognito:" id: isEphemeral() returns true for it, so the hydration
+  // path skips the Mongo HTTP call and returns [] directly. This lets the test
+  // run without the app gateway being up, while still exercising the exact code
+  // path that caused the original bug (the tier separation in getMemory).
+  const id = `incognito:cold-cache-test-${Date.now()}`;
 
-  await redis.del(`conversation:${id}`, `conversation:${id}:sov`);
+  // Write a restricted turn directly into the sovereign Redis tier (simulating a
+  // prior sovereign session whose cache has NOT expired -- the test is about
+  // what the cloud tier reads, not about hydration from Mongo).
+  await redis.set(
+    `conversation:${id}:sov`,
+    JSON.stringify([{ role: "user", content: CANARY_RESTRICTED, at: Date.now() }]),
+    "EX",
+    3600
+  );
 
+  // A cloud read must not see the restricted tier's content.
   const asCloud = JSON.stringify(await getMemory(id, { sovereign: false }));
 
   assert.ok(
     !asCloud.includes(CANARY_RESTRICTED),
-    "a cold cloud tier hydrated restricted content"
+    "a cloud turn read content from the sovereign Redis tier"
   );
 
-  const tier = await redis.get(`conversation:${id}`);
+  // The cloud Redis key must also not contain restricted content (proves the
+  // tier was not written down during hydration).
+  const cloudTier = await redis.get(`conversation:${id}`);
 
   assert.ok(
-    !String(tier).includes(CANARY_RESTRICTED),
-    "the cloud Redis tier was written with restricted content"
+    !String(cloudTier ?? "").includes(CANARY_RESTRICTED),
+    "the cloud Redis tier was written with restricted content during hydration"
   );
 
   await redis.del(`conversation:${id}`, `conversation:${id}:sov`);
@@ -319,6 +334,88 @@ test("a pin list survives the ways a deployment will write it", () => {
 
     process.env.SOVEREIGN_MODEL_DIGESTS = saved ?? "";
 
+  }
+
+});
+
+// ── 5. SOV-004: Redis must resolve locally ──────────────────────────────────
+
+test("SOV-004: a loopback Redis URL is allowed in Sovereign Mode", async () => {
+
+  const saved = process.env.REDIS_URL;
+
+  try {
+    process.env.REDIS_URL = "redis://127.0.0.1:6379";
+    await assert.doesNotReject(
+      () => assertRedisLocal(),
+      "loopback Redis was refused in Sovereign Mode"
+    );
+  } finally {
+    if (saved !== undefined) process.env.REDIS_URL = saved;
+    else delete process.env.REDIS_URL;
+  }
+
+});
+
+test("SOV-004: a Docker Compose service name that resolves to RFC 1918 is allowed", async () => {
+
+  // "localhost" resolves to 127.0.0.1, so it passes the same check as an
+  // explicit loopback address.
+  const saved = process.env.REDIS_URL;
+
+  try {
+    process.env.REDIS_URL = "redis://localhost:6379";
+    await assert.doesNotReject(
+      () => assertRedisLocal(),
+      "localhost Redis was refused in Sovereign Mode"
+    );
+  } finally {
+    if (saved !== undefined) process.env.REDIS_URL = saved;
+    else delete process.env.REDIS_URL;
+  }
+
+});
+
+test("SOV-004: a public Redis URL is refused in Sovereign Mode", async () => {
+
+  // Uses a domain that does not resolve so the test stays offline. The point
+  // is that assertRedisLocal must not silently pass on an obviously remote URL.
+  const saved = process.env.REDIS_URL;
+
+  try {
+    // A URL whose host cannot resolve at all — assertRedisLocal must throw
+    // SOV-004, not succeed because "it could not check".
+    process.env.REDIS_URL = "redis://hosted.redis.nonexistent.invalid:6379";
+    await assert.rejects(
+      () => assertRedisLocal(),
+      (error) => error.rule === "SOV-004",
+      "a non-resolvable remote Redis URL was silently allowed"
+    );
+  } finally {
+    if (saved !== undefined) process.env.REDIS_URL = saved;
+    else delete process.env.REDIS_URL;
+  }
+
+});
+
+test("SOV-004: an explicitly allowlisted host is accepted", async () => {
+
+  const savedUrl      = process.env.REDIS_URL;
+  const savedAllowlist = process.env.SOVEREIGN_REDIS_ALLOWLIST;
+
+  try {
+    process.env.REDIS_URL                 = "redis://on-prem-redis.corp.example:6379";
+    process.env.SOVEREIGN_REDIS_ALLOWLIST = "on-prem-redis.corp.example";
+
+    await assert.doesNotReject(
+      () => assertRedisLocal(),
+      "an allowlisted host was rejected"
+    );
+  } finally {
+    if (savedUrl      !== undefined) process.env.REDIS_URL                 = savedUrl;
+    else delete process.env.REDIS_URL;
+    if (savedAllowlist !== undefined) process.env.SOVEREIGN_REDIS_ALLOWLIST = savedAllowlist;
+    else delete process.env.SOVEREIGN_REDIS_ALLOWLIST;
   }
 
 });

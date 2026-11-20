@@ -1,0 +1,192 @@
+substitutions:
+  _REGION:  asia-south1       # change to your preferred region
+  _REPO:    cldxai             # Artifact Registry repo name
+  _GATEWAY_SA: ""            # gateway Cloud Run service account email
+  _AGENT_SA: ""              # agent Cloud Run service account email
+  _AWS_BUCKET_NAME: ""
+  _COMFY_URL: ""             # optional cloud image generation endpoint
+  _FIREBASE_API_KEY: ""
+  _FIREBASE_AUTH_DOMAIN: ""
+  _FIREBASE_PROJECT_ID: ""
+  _FIREBASE_STORAGE_BUCKET: ""
+  _FIREBASE_MESSAGING_SENDER_ID: ""
+  _FIREBASE_APP_ID: ""
+  _RAZORPAY_PUBLIC_KEY: ""
+
+steps:
+
+  # ── Build both images in parallel ─────────────────────────────────────────
+
+  - id: build-app
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - backend/app/Dockerfile
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/cldx-app:$BUILD_ID
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/cldx-app:latest
+      - ./backend
+    waitFor: ["-"]
+
+  - id: build-agent
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - backend/services/agent/Dockerfile
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/cldx-agent:$BUILD_ID
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/cldx-agent:latest
+      - ./backend
+    waitFor: ["-"]
+
+  # ── Push ──────────────────────────────────────────────────────────────────
+
+  - id: push-app
+    name: gcr.io/cloud-builders/docker
+    args: [push, --all-tags, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/cldx-app"]
+    waitFor: [build-app]
+
+  - id: push-agent
+    name: gcr.io/cloud-builders/docker
+    args: [push, --all-tags, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/cldx-agent"]
+    waitFor: [build-agent]
+
+  # ── Deploy agent first — app needs its URL ────────────────────────────────
+
+  - id: deploy-agent
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - cldx-agent
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/cldx-agent:$BUILD_ID
+      - --region=${_REGION}
+      - --platform=managed
+      - --no-allow-unauthenticated   # internal — only app calls it
+      - --port=8003
+      - --min-instances=1            # keep warm; Puppeteer + LangChain cold-start is slow
+      - --max-instances=10
+      - --memory=2Gi
+      - --cpu=2
+      - --timeout=300                # PDF/PPT generation can take >60 s
+      - --concurrency=4
+      - --service-account=${_AGENT_SA}
+      - --set-env-vars=NODE_ENV=production,PORT=8003,GROQ_MODEL=openai/gpt-oss-120b,CODING_MAX_TOKENS=16000,VISION_MAX_OUTPUT_TOKENS=1024,DEEPSEEK_VISION_MODEL=deepseek-flash,AWS_REGION=ap-south-1,AWS_BUCKET_NAME=${_AWS_BUCKET_NAME},COMFY_URL=${_COMFY_URL}
+      - --set-secrets=MONGODB_URL=MONGODB_URL:latest
+      - --set-secrets=REDIS_URL=REDIS_URL:latest
+      - --set-secrets=INTERNAL_API_KEY=INTERNAL_API_KEY:latest
+      - --set-secrets=GROQ_API_KEY=GROQ_API_KEY:latest
+      - --set-secrets=DEEPSEEK_API_KEY=DEEPSEEK_API_KEY:latest
+      - --set-secrets=GOOGLE_API_KEY=GOOGLE_API_KEY:latest
+      - --set-secrets=TAVILY_API_KEY=TAVILY_API_KEY:latest
+      - --set-secrets=AWS_ACCESS_KEY_ID=AWS_ACCESS_KEY_ID:latest
+      - --set-secrets=AWS_SECRET_ACCESS_KEY=AWS_SECRET_ACCESS_KEY:latest
+      - --set-secrets=QDRANT_URL=QDRANT_URL:latest
+      - --set-secrets=QDRANT_API_KEY=QDRANT_API_KEY:latest
+    waitFor: [push-agent]
+
+  - id: grant-agent-invoker
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+          set -eu
+          test -n '${_GATEWAY_SA}'
+          gcloud run services add-iam-policy-binding cldx-agent \
+            --region='${_REGION}' \
+            --member='serviceAccount:${_GATEWAY_SA}' \
+            --role='roles/run.invoker'
+    waitFor: [deploy-agent]
+
+  # ── Deploy app — reads agent URL dynamically ──────────────────────────────
+
+  - id: deploy-app
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+          set -e
+          AGENT_URL=$(gcloud run services describe cldx-agent \
+            --region=${_REGION} --format='value(status.url)')
+
+          gcloud run deploy cldx-app \
+            --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/cldx-app:$BUILD_ID \
+            --region=${_REGION} \
+            --platform=managed \
+            --allow-unauthenticated \
+            --port=8000 \
+            --min-instances=1 \
+            --max-instances=20 \
+            --memory=512Mi \
+            --cpu=1 \
+            --timeout=360 \
+            --concurrency=80 \
+            --service-account='${_GATEWAY_SA}' \
+            --set-env-vars="NODE_ENV=production,PORT=8000,AGENT_SERVICE=$$AGENT_URL,AGENT_CLOUD_RUN_AUTH=true,COOKIE_SAME_SITE=lax,SARVAM_MODEL=saarika:v2.5,SARVAM_LANGUAGE=unknown" \
+            --set-secrets="MONGODB_URL=MONGODB_URL:latest" \
+            --set-secrets="REDIS_URL=REDIS_URL:latest" \
+            --set-secrets="INTERNAL_API_KEY=INTERNAL_API_KEY:latest" \
+            --set-secrets="RAZORPAY_KEY_ID=RAZORPAY_KEY_ID:latest" \
+            --set-secrets="RAZORPAY_KEY_SECRET=RAZORPAY_KEY_SECRET:latest" \
+            --set-secrets="SARVAM_API_KEY=SARVAM_API_KEY:latest" \
+            --set-secrets="FIREBASE_SERVICE_ACCOUNT=FIREBASE_SERVICE_ACCOUNT:latest"
+    waitFor: [push-app, grant-agent-invoker]
+
+  - id: build-web
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - |
+          set -eu
+          docker build -f deploy/gcp/Dockerfile.web \
+            --build-arg VITE_FIREBASE_API_KEY='${_FIREBASE_API_KEY}' \
+            --build-arg VITE_FIREBASE_AUTH_DOMAIN='${_FIREBASE_AUTH_DOMAIN}' \
+            --build-arg VITE_FIREBASE_PROJECT_ID='${_FIREBASE_PROJECT_ID}' \
+            --build-arg VITE_FIREBASE_STORAGE_BUCKET='${_FIREBASE_STORAGE_BUCKET}' \
+            --build-arg VITE_FIREBASE_MESSAGING_SENDER_ID='${_FIREBASE_MESSAGING_SENDER_ID}' \
+            --build-arg VITE_FIREBASE_APP_ID='${_FIREBASE_APP_ID}' \
+            --build-arg VITE_RAZORPAY_KEY='${_RAZORPAY_PUBLIC_KEY}' \
+            -t '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/cldx-web:$BUILD_ID' \
+            ./frontend
+    waitFor: ["-"]
+
+  - id: push-web
+    name: gcr.io/cloud-builders/docker
+    args: [push, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/cldx-web:$BUILD_ID"]
+    waitFor: [build-web]
+
+  - id: finish-deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+          set -eu
+          APP_URL=$(gcloud run services describe cldx-app --region='${_REGION}' --format='value(status.url)')
+          gcloud run services update cldx-agent --region='${_REGION}' \
+            --update-env-vars="INTERNAL_API_URL=$$APP_URL/internal"
+          gcloud run deploy cldx-web \
+            --image='${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/cldx-web:$BUILD_ID' \
+            --region='${_REGION}' --allow-unauthenticated --port=8080 \
+            --set-env-vars="APP_URL=$$APP_URL"
+          WEB_URL=$(gcloud run services describe cldx-web --region='${_REGION}' --format='value(status.url)')
+          gcloud run services update cldx-app --region='${_REGION}' \
+            --update-env-vars="FRONTEND_URL=$$WEB_URL"
+    waitFor: [deploy-app, push-web]
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/cldx-app:$BUILD_ID
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/cldx-agent:$BUILD_ID
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/cldx-web:$BUILD_ID
+
+options:
+  machineType: E2_HIGHCPU_8    # parallel image builds finish in ~4 min
+  logging: CLOUD_LOGGING_ONLY

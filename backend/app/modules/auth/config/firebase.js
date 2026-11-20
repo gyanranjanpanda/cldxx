@@ -4,22 +4,35 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 let serviceAccount = null;
-try {
-  const saPath = path.join(__dirname, "../serviceAccount.json");
-  if (fs.existsSync(saPath)) {
-    serviceAccount = JSON.parse(fs.readFileSync(saPath, "utf-8"));
+
+// Cloud Run: secret is mounted as an env var via --set-secrets.
+// This is checked first so the image never needs the file on disk.
+if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+  try {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  } catch (e) {
+    console.warn("⚠️ FIREBASE_SERVICE_ACCOUNT env var is not valid JSON:", e.message);
   }
-} catch (e) {}
+}
+
+// Local dev fallback: read from the JSON file beside this config.
+if (!serviceAccount) {
+  try {
+    const saPath = path.join(__dirname, "../serviceAccount.json");
+    if (fs.existsSync(saPath)) {
+      serviceAccount = JSON.parse(fs.readFileSync(saPath, "utf-8"));
+    }
+  } catch (e) {}
+}
 
 let app = null;
 try {
-  if (serviceAccount && serviceAccount.project_id) {
-    app = initializeApp({
-      credential: cert(serviceAccount),
-    });
+  if (serviceAccount?.project_id) {
+    app = initializeApp({ credential: cert(serviceAccount) });
   } else {
-    console.warn("⚠️ Firebase serviceAccount.json is not configured with a valid project_id.");
+    console.warn("⚠️ Firebase Admin: no valid service account found (env var or serviceAccount.json).");
   }
 } catch (err) {
   console.warn("⚠️ Firebase Admin initialization failed:", err.message);

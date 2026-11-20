@@ -6,6 +6,7 @@ import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { newFence, untrustedContentRules, wrapUntrusted } from "../utils/guardrails.js";
 import { getModel } from "../utils/model.js";
 import { QdrantVectorStore } from "@langchain/qdrant";
+import { QdrantClient } from "@qdrant/js-client-rest";
 
 // Small documents fit in the prompt whole. Retrieving the top few chunks for
 // "summarise this" gives the model a handful of passages and a summary of only
@@ -22,6 +23,13 @@ export const pdfRagAgent = async (state) => {
   // collectionName was scoped to the try, so cleanup threw ReferenceError and
   // every uploaded PDF leaked its Qdrant collection.
   const collectionName = `pdf-${Date.now()}`;
+  // vectorStore.js prefixes sovereign collections with "sovereign__". The
+  // cleanup has to use the same name or it deletes nothing and the collection
+  // grows without bound.
+  const sovereign = state.sovereign === true;
+  const storedCollectionName = sovereign
+    ? `sovereign__${collectionName}`
+    : collectionName;
   let backend = null;
 
   try {
@@ -126,7 +134,23 @@ ${state.prompt}
 
     if (backend === "qdrant") {
       try {
-        await QdrantVectorStore.deleteCollection(collectionName);
+        // Use the collection name as it was actually stored, including the
+        // "sovereign__" prefix that vectorStore.js adds for sovereign turns.
+        // Using the bare name would silently delete nothing, leaving the
+        // collection and its contents behind.
+        const qdrantUrl = sovereign
+          ? process.env.SOVEREIGN_QDRANT_URL
+          : process.env.QDRANT_URL;
+        const qdrantApiKey = sovereign
+          ? process.env.SOVEREIGN_QDRANT_API_KEY
+          : process.env.QDRANT_API_KEY;
+
+        const client = new QdrantClient({
+          url: qdrantUrl,
+          ...(qdrantApiKey ? { apiKey: qdrantApiKey } : {}),
+        });
+
+        await client.deleteCollection(storedCollectionName);
       } catch (err) {
         console.log("[pdf_rag] collection cleanup:", err.message);
       }

@@ -6,6 +6,8 @@ import { getDownloadUrl } from "../utils/getDownloadUrl.js";
 import { checkAgentLimit } from "../config/agentRateLimit.js";
 import { deductCredits } from "../utils/deductCredits.js";
 
+const LINK_TTL_SECONDS = 24 * 60 * 60;
+
 // No guardrails here, deliberately. Every other agent fences the outside text
 // it reads -- web pages, documents, repositories, tool output -- because that
 // text can carry instructions. This agent reads none of it: it takes the
@@ -142,19 +144,8 @@ ${state.prompt}
     const fileName =
       `image-${Date.now()}.${extension}`;
 
-    await uploadToS3(
-      imageBuffer,
-      fileName,
-      mimeType
-    );
-
-    const LINK_TTL_SECONDS = 24 * 60 * 60;
-
-    const downloadUrl =
-      await getDownloadUrl(
-        fileName,
-        LINK_TTL_SECONDS
-      );
+    await uploadToS3(imageBuffer, fileName, mimeType);
+    const downloadUrl = await getDownloadUrl(fileName, LINK_TTL_SECONDS);
 
     return {
 

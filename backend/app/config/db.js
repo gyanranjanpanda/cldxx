@@ -6,8 +6,7 @@ import mongoose from "mongoose";
 const connectDB = async () => {
 
   if (!process.env.MONGODB_URL || !process.env.MONGODB_URL.startsWith("mongodb")) {
-    console.warn("⚠️ MONGODB_URL is not configured with a valid MongoDB URI.");
-    return;
+    throw new Error("MONGODB_URL is not configured with a valid MongoDB URI");
   }
 
   await mongoose.connect(process.env.MONGODB_URL);

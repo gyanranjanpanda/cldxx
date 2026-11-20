@@ -11,6 +11,12 @@ const CLIENT_INFO = {
 
 // A server that never answers would otherwise hold the whole chat request open.
 export const CONNECT_TIMEOUT_MS = Number(process.env.MCP_CONNECT_TIMEOUT_MS) || 12_000;
+// Python-based local servers can spend several seconds importing their MCP
+// stack on a cold start. Keep remote connection checks fast, but give stdio
+// processes a separate deadline so a slow first launch is not reported as an
+// unreachable server.
+export const STDIO_CONNECT_TIMEOUT_MS =
+  Number(process.env.MCP_STDIO_CONNECT_TIMEOUT_MS) || 30_000;
 export const CALL_TIMEOUT_MS    = Number(process.env.MCP_CALL_TIMEOUT_MS)    || 45_000;
 // Rendering, video generation and other compute tools legitimately take
 // longer than ordinary CRUD/search tools. A single global 45s deadline made
@@ -74,19 +80,21 @@ const assertCommandSafe = (command) => {
 
 };
 
-const buildTransport = async (config) => {
+const buildTransport = async (config, transportType = config.transport) => {
 
   if (config.transport === "stdio") {
 
     assertCommandSafe(config.command);
 
     // Inheriting the agent's whole environment would hand a user-named binary
-    // every key the service holds. Only PATH plus what was configured.
+    // every key the service holds. Only PATH plus what was configured, along
+    // with unbuffered standard I/O so Python processes don't stall JSON-RPC pipes.
     return new StdioClientTransport({
       command: config.command,
       args:    config.args || [],
       env: {
         PATH: process.env.PATH,
+        PYTHONUNBUFFERED: "1",
         ...pairsToObject(config.env)
       },
       stderr: "pipe"
@@ -108,7 +116,7 @@ const buildTransport = async (config) => {
     ? { requestInit: { headers } }
     : {};
 
-  return config.transport === "sse"
+  return transportType === "sse"
     ? new SSEClientTransport(url, options)
     : new StreamableHTTPClientTransport(url, options);
 
@@ -120,19 +128,47 @@ const buildTransport = async (config) => {
  */
 export const openClient = async (config) => {
 
-  const client = new Client(CLIENT_INFO, {
-    capabilities: {}
-  });
+  // Prefer Streamable HTTP, but retry the legacy SSE handshake. Many hosted
+  // MCP servers advertise one URL while still implementing the older SSE
+  // transport, and treating that normal compatibility case as unreachable
+  // leaves the chat with no tools.
+  const transportTypes = config.transport === "http"
+    ? ["http", "sse"]
+    : [config.transport];
+  let lastError;
 
-  const transport = await buildTransport(config);
+  for (const transportType of transportTypes) {
 
-  await withTimeout(
-    client.connect(transport),
-    CONNECT_TIMEOUT_MS,
-    `Connecting to ${config.name}`
-  );
+    const client = new Client(CLIENT_INFO, {
+      capabilities: {}
+    });
+    const transport = await buildTransport(config, transportType);
 
-  return client;
+    try {
+
+      await withTimeout(
+        client.connect(transport),
+        transportType === "stdio" ? STDIO_CONNECT_TIMEOUT_MS : CONNECT_TIMEOUT_MS,
+        `Connecting to ${config.name}`
+      );
+
+      return client;
+
+    } catch (error) {
+
+      lastError = error;
+
+      try {
+        await transport.close();
+      } catch {
+        // The transport may not have finished initializing.
+      }
+
+    }
+
+  }
+
+  throw lastError || new Error(`Could not connect to ${config.name}`);
 
 };
 

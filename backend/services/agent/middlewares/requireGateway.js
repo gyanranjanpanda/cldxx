@@ -10,19 +10,8 @@ export const requireGateway = (req, res, next) => {
 
   const expected = process.env.INTERNAL_API_KEY;
 
-  // No key configured means an install that never had one. Refusing here would
-  // break it on upgrade, so warn loudly and keep the previous behaviour.
   if (!expected) {
-
-    if (!requireGateway.warned) {
-      console.warn(
-        "[security] INTERNAL_API_KEY is not set -- the agent cannot tell a proxied request from a direct one. Set it in both services."
-      );
-      requireGateway.warned = true;
-    }
-
-    return next();
-
+    return res.status(503).json({ success: false, message: "INTERNAL_API_KEY is not configured" });
   }
 
   const provided = req.headers["x-internal-key"];

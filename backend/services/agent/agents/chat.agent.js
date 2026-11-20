@@ -7,6 +7,7 @@ import { describeNow } from "../utils/now.js";
 import { newFence, untrustedContentRules, wrapUntrusted } from "../utils/guardrails.js";
 import { runWithMcpTools } from "../utils/mcp/runTools.js";
 import { hasRestrictedHistory } from "../utils/memory.js";
+import { traceSpan } from "../utils/diagnostics/tracer.js";
 
 
 export const chatAgent =
@@ -31,11 +32,17 @@ await checkAgentLimit(
 
  // The zone decides what this turn is allowed to see: a sovereign turn reads
  // both tiers, a cloud turn only its own.
- const history =
- await getMemory(
-  state.conversationId,
-  { sovereign: state.sovereign === true }
- );
+ const history = state.trace
+  ? await traceSpan(state.trace, "MEMORY_READ", () =>
+      getMemory(
+        state.conversationId,
+        { sovereign: state.sovereign === true }
+      )
+    )
+  : await getMemory(
+      state.conversationId,
+      { sovereign: state.sovereign === true }
+    );
 
  
 
@@ -221,14 +228,21 @@ Formatting:
 
  // Runs the model with whatever MCP tools the user has enabled bound to it,
  // and falls back to a plain invoke when there are none.
- const { response, toolCalls, mcpErrors } = await runWithMcpTools({
-   llm,
-   messages,
-   userId: state.userId,
-   // Carried through so the tool loop's model is resolved under the same
-   // Sovereign Mode decision as the rest of the turn.
-   state
- });
+ const { response, toolCalls, mcpErrors } = state.trace
+   ? await traceSpan(state.trace, "RUN_WITH_MCP_TOOLS", () =>
+       runWithMcpTools({
+         llm,
+         messages,
+         userId: state.userId,
+         state
+       })
+     )
+   : await runWithMcpTools({
+       llm,
+       messages,
+       userId: state.userId,
+       state
+     });
 
  if (mcpErrors?.length) {
    console.warn("[mcp] unreachable servers:", mcpErrors);

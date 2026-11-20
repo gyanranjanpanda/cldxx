@@ -5,6 +5,7 @@ import { getModel } from "../model.js";
 import { audit } from "../audit.js";
 import { newFence, untrustedContentRules, wrapUntrusted } from "../guardrails.js";
 import { parseTextToolCalls, textToolContract } from "./textCalls.js";
+import { traceSpan, recordEvent, recordBreakpoint } from "../diagnostics/tracer.js";
 
 // Each round trip is a full model call, so this caps cost and stops a server
 // that keeps asking to be called again from looping forever.
@@ -312,7 +313,7 @@ const friendlyProviderError = (error) => {
 };
 
 // One retry, and only for a limit the provider says will clear on its own.
-const invokeWithRetry = async (model, thread) => {
+const invokeWithRetry = async (model, thread, trace = null) => {
 
   try {
 
@@ -325,6 +326,20 @@ const invokeWithRetry = async (model, thread) => {
     if (!wait || wait > MAX_RETRY_WAIT_MS) throw error;
 
     console.warn(`[mcp] rate limited, retrying in ${Math.round(wait / 1000)}s`);
+
+    if (trace) {
+      recordEvent(
+        trace,
+        "RETRY_WAIT_TRIGGERED",
+        `Provider rate limit (429). Pausing for ${Math.round(wait / 1000)}s before retrying`,
+        {
+          waitMs: wait,
+          waitSeconds: Math.round(wait / 1000),
+          error: error?.message
+        },
+        "WARN"
+      );
+    }
 
     await new Promise((resolve) => setTimeout(resolve, wait));
 
@@ -377,7 +392,9 @@ export const runWithMcpTools = async ({ llm, messages, userId, state = {} }) => 
 
   try {
 
-    const { servers: available, stdioAllowed } = await fetchServers(userId);
+    const { servers: available, stdioAllowed } = state.trace
+      ? await traceSpan(state.trace, "MCP_FETCH_SERVERS", () => fetchServers(userId))
+      : await fetchServers(userId);
 
     if (!available.length) {
       if (explicitMcpRequest) {
@@ -388,7 +405,9 @@ export const runWithMcpTools = async ({ llm, messages, userId, state = {} }) => 
         };
       }
 
-      const reply = await llm.invoke(messages);
+      const reply = state.trace
+        ? await traceSpan(state.trace, "MODEL_INVOKE_DIRECT", () => llm.invoke(messages))
+        : await llm.invoke(messages);
       return { response: readReply(reply), toolCalls: [], mcpErrors: [] };
     }
 
@@ -454,7 +473,11 @@ export const runWithMcpTools = async ({ llm, messages, userId, state = {} }) => 
 
     session = new McpSession(servers, { stdioAllowed });
 
-    const { specs: discovered, errors } = await session.discover();
+    const { specs: discovered, errors } = state.trace
+      ? await traceSpan(state.trace, "MCP_DISCOVER", () => session.discover(), {
+          candidateServers: servers.map((s) => s.name || s.id),
+        })
+      : await session.discover();
 
     if (refused > 0) {
       errors.push({
@@ -527,7 +550,11 @@ export const runWithMcpTools = async ({ llm, messages, userId, state = {} }) => 
 
     for (let round = 0; round < MAX_ROUNDS; round++) {
 
-      const reply = await invokeWithRetry(llmWithTools, thread);
+      const reply = state.trace
+        ? await traceSpan(state.trace, `MODEL_INVOKE_ROUND_${round + 1}`, () =>
+            invokeWithRetry(llmWithTools, thread, state.trace), { round: round + 1 }
+          )
+        : await invokeWithRetry(llmWithTools, thread, state.trace);
 
       let calls = reply.tool_calls || [];
 
@@ -559,7 +586,11 @@ export const runWithMcpTools = async ({ llm, messages, userId, state = {} }) => 
       // and a parallel burst is the fastest way to trip their rate limits.
       for (const call of calls) {
 
-        const result = await session.invoke(call.name, call.args);
+        const result = state.trace
+          ? await traceSpan(state.trace, `TOOL_EXECUTE_${call.name}`, () =>
+              session.invoke(call.name, call.args), { toolName: call.name }
+            )
+          : await session.invoke(call.name, call.args);
 
         // Fenced before it is truncated, so the closing delimiter cannot be
         // cut off and leave the rest of the prompt inside the block.
@@ -638,6 +669,12 @@ export const runWithMcpTools = async ({ llm, messages, userId, state = {} }) => 
 
     // MCP itself is an enhancement, so anything else still gets an answer.
     console.error("[mcp] tool loop failed:", error.message);
+
+    if (state.trace) {
+      recordBreakpoint(state.trace, "MCP_TOOL_LOOP_EXCEPTION", error, {
+        stage: "MCP_LOOP"
+      });
+    }
 
     const reply = await llm.invoke(messages);
 

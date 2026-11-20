@@ -8,6 +8,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 import connectDB from "./config/db.js";
+import redis from "../shared/redis/redis.js";
 import { protect } from "./middlewares/auth.middleware.js";
 import { injectUser } from "./middlewares/injectUser.js";
 import { withSovereignPolicy } from "./utils/sovereignPolicy.js";
@@ -61,7 +62,6 @@ app.use(
 );
 app.use(morgan("dev"));
 app.use(cookieParser());
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // The agent proxy has to see the raw stream, so JSON parsing is mounted per
 // route rather than globally — parsing the body here would leave the proxied
@@ -116,8 +116,13 @@ app.use((err, req, res, next) => {
 const start = async () => {
   try {
     await connectDB();
+    await Promise.race([
+      redis.ping(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Redis startup timeout")), 10000))
+    ]);
   } catch (error) {
-    console.error("❌ MongoDB connection failed:", error.message);
+    console.error("❌ Gateway dependencies unavailable:", error.message);
+    process.exit(1);
   }
 
   app.listen(port, "0.0.0.0", () => {

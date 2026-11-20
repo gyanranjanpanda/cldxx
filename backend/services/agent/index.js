@@ -14,6 +14,7 @@ if (typeof globalThis.Path2D === 'undefined') {
 import express from "express";
 import multer from "multer";
 import connectDB from "./config/db.js";
+import redis from "../../shared/redis/redis.js";
 import router from "./routes/agent.route.js";
 import { readArtifact, startArtifactSweeper } from "./utils/storage.js";
 const app = express();
@@ -149,10 +150,19 @@ import { warmProvenance } from "./utils/provenance.js";
 // pinned it would be refused outright under SOV-008. Milliseconds at startup buy
 // the guarantee that neither can happen.
 await warmProvenance();
+try {
+  await connectDB();
+  await Promise.race([
+    redis.ping(),
+    new Promise((_, reject) => setTimeout(() => reject(new Error("Redis startup timeout")), 10000))
+  ]);
+} catch (error) {
+  console.error("Agent dependencies unavailable:", error.message);
+  process.exit(1);
+}
 
 console.log("Agent starting on port:", port);
 app.listen(port, "0.0.0.0", () => {
-  connectDB();
   // Read once, at startup, so the digest of the weights that answer is already
   // known when a turn needs to record it -- getModel is synchronous and cannot
   // wait on the runtime mid-request.

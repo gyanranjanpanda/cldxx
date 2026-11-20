@@ -4,6 +4,7 @@ import { isClockQuestion } from "../utils/now.js";
 import redis from "../../../shared/redis/redis.js";
 import { describeTools, wantsMcpTools } from "../utils/mcp/intent.js";
 import { CLOUD_ONLY_AGENTS, assertSovereignReady } from "../utils/sovereign.js";
+import { recordEvent, traceSpan } from "../utils/diagnostics/tracer.js";
 
 export const routerNode =
 async(state)=>{
@@ -43,6 +44,10 @@ if (
 
         };
 
+    }
+
+    if (state.trace) {
+      recordEvent(state.trace, "ROUTER_DECISION", `Explicit agent requested: ${state.agent}`);
     }
 
     return {
@@ -174,8 +179,7 @@ Only fall through to the categories below when no tool fits.
 `
  : "";
 
- const result =
- await llm.invoke(`
+ const routerPrompt = `
 
 You are an agent router.
 ${toolRule}
@@ -242,7 +246,11 @@ User Query:
 
 ${state.prompt}
 
- `);
+ `;
+
+ const result = state.trace
+   ? await traceSpan(state.trace, "ROUTER_CLASSIFY_LLM", () => llm.invoke(routerPrompt))
+   : await llm.invoke(routerPrompt);
 
  // Reasoning models wrap their answer in prose, and any model occasionally
  // adds punctuation or a sentence. Pull the first known label out of the
@@ -298,6 +306,12 @@ ${state.prompt}
 
   }
 
+ }
+
+ if (state.trace) {
+  recordEvent(state.trace, "ROUTER_DECISION", `Target agent resolved to '${picked}'`, {
+    pickedAgent: picked
+  });
  }
 
  return {

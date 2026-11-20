@@ -74,6 +74,10 @@ Annotation.Root({
  // does not know about is dropped, and every agent would fall back to the
  // platform key without anything saying so.
  keys:
+ Annotation(),
+
+ // Diagnostic trace context for recording stage latencies and breakpoints.
+ trace:
  Annotation()
 
 });

@@ -1,10 +1,18 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { X, Crown, Zap } from "lucide-react";
-import { useState } from "react";
-import { useEffect } from "react";
 import { useSelector } from "react-redux";
 import { createOrder } from "../features/billing.api";
 import api from "../utils/axios";
+
+const loadCheckout = () => new Promise((resolve, reject) => {
+  if (window.Razorpay) return resolve();
+  const script = document.createElement("script");
+  script.src = "https://checkout.razorpay.com/v1/checkout.js";
+  script.async = true;
+  script.onload = resolve;
+  script.onerror = () => reject(new Error("Payment checkout could not load"));
+  document.head.appendChild(script);
+});
 
 export default function BillingDrawer({
   open,
@@ -65,6 +73,7 @@ export default function BillingDrawer({
 
         };
 
+        await loadCheckout();
         const razorpay =
             new window.Razorpay(options);
 
@@ -79,10 +88,7 @@ export default function BillingDrawer({
     }
 
 };
- console.log((
-(userData?.credits || 0) /
-(userData?.totalCredits || 1)
-) * 100)
+ const unlimited = userData?.plan === "unlimited";
   return (
     <AnimatePresence>
       {open && (
@@ -170,7 +176,7 @@ export default function BillingDrawer({
 
                     <span>Credits</span>
 
-                    <span>{userData?.credits || 0}/{userData?.totalCredits || 0}</span>
+                    <span>{unlimited ? "Unlimited" : `${userData?.credits || 0}/${userData?.totalCredits || 0}`}</span>
 
                   </div>
 
@@ -179,12 +185,7 @@ export default function BillingDrawer({
                   <div
                   className="h-full bg-blue-500 transition-all duration-500"
   style={{
-    width: `${
-      (
-        (userData?.credits || 0) /
-        (userData?.totalCredits || 1)
-      ) * 100
-    }%`
+                    width: `${unlimited ? 100 : ((userData?.credits || 0) / (userData?.totalCredits || 1)) * 100}%`
   }}
 />
 
