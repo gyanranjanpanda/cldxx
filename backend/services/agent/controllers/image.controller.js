@@ -359,24 +359,31 @@ async (req, res, next) => {
 
   }
 
-  // Stored and served from S3, the same as every other generated image in the
-  // product. The browser never learns COMFY_URL: the bytes travel ComfyUI ->
-  // this service -> S3, and the user gets a presigned link that keeps working
-  // after the Colab notebook is gone, which a /view link would not.
+  // Cloud instances do not share a filesystem. A local fallback would return a
+  // URL to a file in the agent container that the gateway cannot serve.
   const fileName =
    `image-${Date.now()}.${image.extension}`;
 
-  await uploadToS3(
-   image.buffer,
-   fileName,
-   image.contentType
-  );
+  let downloadUrl = null;
 
-  const downloadUrl =
-   await getDownloadUrl(
+  try {
+   await uploadToS3(
+    image.buffer,
     fileName,
-    LINK_TTL_SECONDS
+    image.contentType
    );
+
+   downloadUrl =
+    await getDownloadUrl(
+     fileName,
+     LINK_TTL_SECONDS
+    );
+  } catch (s3Error) {
+   await redis.del(claimKey(promptId));
+   const error = new Error(`Image storage unavailable: ${s3Error.message}`);
+   error.status = 503;
+   throw error;
+  }
 
   const images = [downloadUrl];
 

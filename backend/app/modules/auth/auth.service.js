@@ -69,13 +69,13 @@ export const deductUserCredits = async ({ userId, agent }) => {
 
   const requiredCredits = CREDIT_COST[agent] || 1;
 
-  if (user.credits < requiredCredits) {
+  if (user.plan !== "unlimited" && user.credits < requiredCredits) {
     throw new AuthError(400, "Not enough credits.", {
       title: "Insufficient Credits"
     });
   }
 
-  user.credits -= requiredCredits;
+  if (user.plan !== "unlimited") user.credits -= requiredCredits;
 
   await user.save();
   await refreshSession(user);

@@ -10,7 +10,16 @@ import { Copy, Check } from "lucide-react";
 function MessageBubble({ role, content ,images}) {
   const isUser = role === "user";
   const [lightboxSrc, setLightboxSrc] = useState(null);
-const [copiedCode, setCopiedCode] = useState("");
+  const [copiedCode, setCopiedCode] = useState("");
+
+  const resolveImageUrl = (url) => {
+    if (!url) return "";
+    if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) {
+      return url;
+    }
+    const baseUrl = import.meta.env.VITE_SERVER_URL || window.location.origin;
+    return `${baseUrl.replace(/\/+$/, "")}${url.startsWith("/") ? "" : "/"}${url}`;
+  };
 
 // Escape closes, and the chat behind is frozen -- without the lock a trackpad
 // scroll moves the conversation under the overlay while the picture stays put.
@@ -62,16 +71,23 @@ const markdown = (content || "")
       >
         {images.length > 0 && (
     <div className="flex flex-wrap gap-3 mt-4">
-        {images.map((img, i) => (
+        {images.map((img, i) => {
+          const resolvedSrc = resolveImageUrl(img);
+          return (
             <img
-                key={i}
-                src={img}
-                loading="lazy"
-                onClick={() => setLightboxSrc(img)}
-                onError={(e)=>e.currentTarget.remove()}
-                className="w-40 h-28 rounded-xl object-cover border border-white/10 cursor-zoom-in hover:opacity-90 transition"
+              key={i}
+              src={resolvedSrc}
+              loading="lazy"
+              onClick={() => setLightboxSrc(resolvedSrc)}
+              onError={(e) => {
+                console.warn("Failed to load image:", resolvedSrc);
+                e.currentTarget.onerror = null;
+                e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='112' viewBox='0 0 160 112'%3E%3Crect width='160' height='112' fill='%231e293b'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%2394a3b8' font-size='12'%3EImage Unavailable%3C/text%3E%3C/svg%3E";
+              }}
+              className="w-40 h-28 rounded-xl object-cover border border-white/10 cursor-zoom-in hover:opacity-90 transition"
             />
-        ))}
+          );
+        })}
     </div>
 )}<ReactMarkdown
   remarkPlugins={[remarkGfm]}
@@ -140,13 +156,18 @@ const markdown = (content || "")
 
     img: ({ src }) => {
       if (!src) return null;
+      const resolvedSrc = resolveImageUrl(src);
 
       return (
         <img
-          src={src}
+          src={resolvedSrc}
           loading="lazy"
-          onClick={() => setLightboxSrc(src)}
-          onError={(e) => e.currentTarget.remove()}
+          onClick={() => setLightboxSrc(resolvedSrc)}
+          onError={(e) => {
+            console.warn("Failed to load markdown image:", resolvedSrc);
+            e.currentTarget.onerror = null;
+            e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='112' viewBox='0 0 160 112'%3E%3Crect width='160' height='112' fill='%231e293b'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%2394a3b8' font-size='12'%3EImage Unavailable%3C/text%3E%3C/svg%3E";
+          }}
           className="w-40 h-28 rounded-xl object-cover cursor-pointer"
         />
       );

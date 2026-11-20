@@ -18,6 +18,7 @@ import {
 import { assertModelIntegrity, fingerprintOf } from "./provenance.js";
 
 import { audit } from "./audit.js";
+import { recordEvent } from "./diagnostics/tracer.js";
 
 // DeepSeek serves every route that needs more than a short text reply: the
 // MCP loop, whose bound tool schemas are ~9k tokens of prompt before the
@@ -149,6 +150,13 @@ export const getModel =
   rule: "CLD-000"
 
  });
+
+ if (state?.trace) {
+   recordEvent(state.trace, "MODEL_RESOLVED", `Selected cloud model for agent '${agent}'`, {
+     agent,
+     zone: "CLOUD"
+   });
+ }
 
  switch (agent) {
    case "coding":

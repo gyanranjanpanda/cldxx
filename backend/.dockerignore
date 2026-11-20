@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+.env
+.env.*
+**/.env
+**/.env.*
+**/serviceAccount.json
+*.log
+*.log.*
+audit/
+temp/
+artifacts/
+dist/
+.git
+.gitignore
+README.md

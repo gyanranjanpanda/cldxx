@@ -16,6 +16,98 @@ export {
  resolveSovereign
 } from "../../../shared/zone/zone.js";
 
+// ── SOV-004: Redis must not be a hosted service in Sovereign Mode ────────────
+//
+// The sovereign Redis tier stores restricted conversation history. If REDIS_URL
+// points at a hosted provider (Upstash, Redis Cloud, ElastiCache) the data
+// leaves the customer's boundary — the same violation the mode exists to prevent,
+// just one layer lower than the LLM. Fail closed on the first sovereign turn
+// rather than discovering it in a compliance audit.
+//
+// What counts as "local" is intentionally narrow: 127.x, ::1, and an explicit
+// allowlist. Docker Compose service names (e.g. "redis") resolve to private RFC
+// 1918 addresses at runtime, so they pass network-level controls without being
+// allowed here by name — resolve first, then check.
+
+import dns from "dns/promises";
+import net from "net";
+
+// Read at call time so env changes in tests and deployments that set the
+// variable after first import take effect without a process restart.
+const allowlist = () =>
+  (process.env.SOVEREIGN_REDIS_ALLOWLIST || "")
+    .split(",")
+    .map((h) => h.trim())
+    .filter(Boolean);
+
+const isLoopback = (ip) =>
+  ip === "127.0.0.1" ||
+  ip === "::1" ||
+  ip.startsWith("127.");
+
+const isPrivateRfc1918 = (ip) => {
+  const parts = ip.split(".").map(Number);
+  if (parts.length !== 4) return false;
+  const [a, b] = parts;
+  return (
+    (a === 10) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168)
+  );
+};
+
+/**
+ * SOV-004: Refuses to start a sovereign turn if the Redis URL resolves to a
+ * host outside the deployment's trust boundary.
+ *
+ * Loopback and RFC 1918 addresses are allowed (they never leave the machine or
+ * the private network). A host in SOVEREIGN_REDIS_ALLOWLIST is also allowed,
+ * which covers on-premises Redis clusters with routable IPs.
+ *
+ * Everything else — hosted Redis providers, public IPs — is refused.
+ */
+export const assertRedisLocal = async () => {
+  const rawUrl = process.env.REDIS_URL || "redis://127.0.0.1:6379";
+
+  let host;
+  try {
+    // ioredis accepts redis://host:port and rediss://host:port
+    host = new URL(rawUrl.replace(/^rediss?:\/\//, "http://")).hostname;
+  } catch {
+    // Cannot parse → cannot verify → fail closed.
+    throw new PolicyDenied(
+      `REDIS_URL ("${rawUrl}") could not be parsed. Set a valid redis:// URL that resolves locally.`,
+      "SOV-004"
+    );
+  }
+
+  if (allowlist().includes(host)) return;
+
+  // A literal IP is checked directly; a hostname is resolved first so a
+  // Docker Compose service name ("redis") passes when it resolves to 172.x.
+  const addresses = net.isIP(host)
+    ? [host]
+    : await dns.lookup(host, { all: true })
+        .then((entries) => entries.map((e) => e.address))
+        .catch(() => {
+          throw new PolicyDenied(
+            `REDIS_URL host "${host}" could not be resolved. Sovereign Mode requires a reachable local Redis.`,
+            "SOV-004"
+          );
+        });
+
+  for (const ip of addresses) {
+    if (isLoopback(ip) || isPrivateRfc1918(ip)) return;
+  }
+
+  throw new PolicyDenied(
+    `REDIS_URL resolves to a public address (${addresses.join(", ")}). ` +
+    "Sovereign Mode requires a local Redis instance. " +
+    "Add the host to SOVEREIGN_REDIS_ALLOWLIST if it is an on-premises cluster.",
+    "SOV-004"
+  );
+};
+
 export const SOVEREIGN_BASE_URL =
  process.env.SOVEREIGN_BASE_URL || "";
 

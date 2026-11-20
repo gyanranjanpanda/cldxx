@@ -127,7 +127,16 @@ const handleDrop = (e) => {
   e.preventDefault();
   dragDepth.current = 0;
   setIsDragging(false);
-  acceptFile(e.dataTransfer.files?.[0]);
+  const file = e.dataTransfer?.files?.[0];
+  if (file) acceptFile(file);
+};
+
+const handleFileChange = (e) => {
+  const file = e.currentTarget.files?.[0];
+  if (file) acceptFile(file);
+
+  // Allow choosing the same file again after removing or replacing it.
+  e.currentTarget.value = "";
 };
 
    const placeholders={
@@ -479,11 +488,14 @@ catch(error){
       className="w-full overflow-hidden px-3 md:px-5 py-4 border-t border-white/[0.06] bg-[#0d0f14]"
       onDragEnter={(e) => {
         e.preventDefault();
-        if (!e.dataTransfer?.types?.includes("Files")) return;
+        if (!e.dataTransfer?.items?.length && !e.dataTransfer?.files?.length) return;
         dragDepth.current += 1;
         setIsDragging(true);
       }}
-      onDragOver={(e) => e.preventDefault()}
+      onDragOver={(e) => {
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+      }}
       onDragLeave={(e) => {
         e.preventDefault();
         dragDepth.current = Math.max(0, dragDepth.current - 1);
@@ -669,9 +681,14 @@ className="text-slate-500 hover:text-white"
         <textarea
           value={value}
           onChange={e => setValue(e.target.value)}
+          onKeyDown={e => {
+            if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+            e.preventDefault();
+            if (!isLoading) handleSend();
+          }}
           placeholder={
-placeholders[selectedAgent]
-}
+            placeholders[selectedAgent]
+          }
           rows={3}
           disabled={isLoading}
           className="w-full bg-transparent outline-none resize-none text-[14px] text-slate-200 placeholder:text-slate-600 leading-relaxed [scrollbar-width:none] [&::-webkit-scrollbar]:hidden disabled:opacity-50"
@@ -694,15 +711,15 @@ accept="image/*,.pdf,.docx,.txt,.md,.markdown,.csv,.tsv,.json,.log,.yml,.yaml,.x
 
 onChange={(e)=>{
 
-acceptFile(e.target.files[0]);
+handleFileChange(e);
 
 }}
 
 />
-            <button className="flex items-center justify-center w-8 h-8 rounded-lg text-slate-600 hover:text-slate-400 hover:bg-white/[0.05] border border-transparent hover:border-white/[0.06] transition-all duration-150 bg-transparent cursor-pointer"
-            onClick={()=>
-fileRef.current.click()
-}
+            <button
+            type="button"
+            className="flex items-center justify-center w-8 h-8 rounded-lg text-slate-600 hover:text-slate-400 hover:bg-white/[0.05] border border-transparent hover:border-white/[0.06] transition-all duration-150 bg-transparent cursor-pointer"
+            onClick={() => fileRef.current?.click()}
             >
               <Paperclip size={14} />
             </button>

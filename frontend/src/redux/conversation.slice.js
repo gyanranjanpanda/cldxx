@@ -25,7 +25,7 @@ const initialState = {
   // Unlike incognito this is not about storage -- it decides which zone the
   // prompt is allowed to reach, so it is sent with every request rather than
   // being inferred from the conversation id.
-  sovereign:false
+  sovereign:import.meta.env.VITE_SOVEREIGN_ONLY === "true"
 }
 
 export const conversationSlice = createSlice({
@@ -62,7 +62,7 @@ export const conversationSlice = createSlice({
 
   setSovereign: (state,action)=>{
 
-   state.sovereign = Boolean(action.payload);
+   state.sovereign = import.meta.env.VITE_SOVEREIGN_ONLY === "true" || Boolean(action.payload);
 
   },
 

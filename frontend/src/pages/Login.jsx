@@ -1,22 +1,26 @@
 import { useState } from "react";
 import { useDispatch } from "react-redux";
 import { FcGoogle } from "react-icons/fc";
-import { signInWithPopup } from "firebase/auth";
-import { auth, googleProvider } from "../../firebase";
 import api from "../utils/axios";
 import { setUserData } from "../redux/user.slice";
 import GridScan from "../components/GridScan";
 
 function Login() {
+  const localAuth = import.meta.env.VITE_LOCAL_AUTH_ENABLED === "true";
   const dispatch = useDispatch();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
 
   const handleGoogleLogin = async () => {
     if (loading) return;
     setLoading(true);
     setError("");
     try {
+      const [{ signInWithPopup }, { auth, googleProvider }] = await Promise.all([
+        import("firebase/auth"), import("../../firebase")
+      ]);
       const result = await signInWithPopup(auth, googleProvider);
       const token = await result.user.getIdToken();
       const { data } = await api.post(`/api/auth/login`, { token });
@@ -27,6 +31,21 @@ function Login() {
         const msg = err?.response?.data?.message || err?.message || err?.code || "Could not sign you in. Please try again.";
         setError(msg);
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLocalLogin = async (event) => {
+    event.preventDefault();
+    if (loading) return;
+    setLoading(true);
+    setError("");
+    try {
+      const { data } = await api.post("/api/auth/local-login", { username, password });
+      dispatch(setUserData(data.user));
+    } catch (err) {
+      setError(err?.response?.data?.message || "Could not sign in");
     } finally {
       setLoading(false);
     }
@@ -88,7 +107,18 @@ function Login() {
             </p>
           </div>
 
-          <button
+          {localAuth ? <form onSubmit={handleLocalLogin} className="pointer-events-auto mt-7 space-y-3">
+            <input aria-label="Username" autoComplete="username" value={username}
+              onChange={(event) => setUsername(event.target.value)} required
+              className="w-full rounded-xl border border-slate-600 bg-[#0B0F19] px-3 py-2 text-slate-100" placeholder="Username" />
+            <input aria-label="Password" type="password" autoComplete="current-password" value={password}
+              onChange={(event) => setPassword(event.target.value)} required
+              className="w-full rounded-xl border border-slate-600 bg-[#0B0F19] px-3 py-2 text-slate-100" placeholder="Password" />
+            <button type="submit" disabled={loading}
+              className="w-full rounded-xl bg-[#6366F1] py-3 text-sm font-medium text-white disabled:opacity-60">
+              {loading ? "Signing in…" : "Sign in"}
+            </button>
+          </form> : <button
             onClick={handleGoogleLogin}
             disabled={loading}
             className="pointer-events-auto mt-7 flex w-full cursor-pointer items-center justify-center gap-3 rounded-xl bg-[#6366F1] py-[11px] text-sm font-medium text-white shadow-[0_0_20px_-8px_rgba(99,102,241,0.8)] transition-all duration-150 hover:bg-[#4F46E5] hover:shadow-[0_0_26px_-8px_rgba(99,102,241,0.95)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
@@ -97,7 +127,7 @@ function Login() {
               <FcGoogle size={14} />
             </span>
             {loading ? "Signing in…" : "Continue with Google"}
-          </button>
+          </button>}
 
           {error && (
             <p className="mt-3 text-center text-[12px] text-blue-300">{error}</p>

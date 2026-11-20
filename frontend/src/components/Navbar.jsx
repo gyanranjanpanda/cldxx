@@ -44,7 +44,8 @@ export default function Navbar() {
 
       {/* Right — actions */}
       <div className="flex items-center gap-1.5">
-        <button
+        {import.meta.env.VITE_SOVEREIGN_AVAILABLE === "true" &&
+         import.meta.env.VITE_SOVEREIGN_ONLY !== "true" && <button
           onClick={() => dispatch(setSovereign(!sovereign))}
           title={sovereign
             ? "Sovereign Mode on — answered by your own models, nothing leaves your infrastructure"
@@ -57,7 +58,7 @@ export default function Navbar() {
         >
           <ShieldCheck size={13} />
           Sovereign
-        </button>
+        </button>}
 
         {/* Only a stored conversation can be shared: incognito has no row to
             point a link at, and an unsaved chat has nothing to show a guest. */}

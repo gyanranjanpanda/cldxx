@@ -10,7 +10,7 @@
 
 import { getModel } from "../utils/model.js";
 import { getEmbeddings } from "../utils/embedding.js";
-import { CLOUD_ONLY_AGENTS, SOVEREIGN_BASE_URL } from "../utils/sovereign.js";
+import { CLOUD_ONLY_AGENTS, SOVEREIGN_BASE_URL, assertRedisLocal } from "../utils/sovereign.js";
 import { verifyAuditChain } from "../utils/audit.js";
 import { warmProvenance, fingerprintOf, assertModelIntegrity } from "../utils/provenance.js";
 
@@ -142,6 +142,18 @@ try {
     : bad(`chain broken at line ${result.line}: ${result.reason}`);
 } catch {
   console.log("  \x1b[33mSKIP\x1b[0m  no audit log written yet");
+}
+
+// ── 6. SOV-004: Redis must resolve locally ───────────────────────────────────
+console.log("\nRedis boundary (SOV-004):");
+try {
+  await assertRedisLocal();
+  const url = process.env.REDIS_URL || "redis://127.0.0.1:6379";
+  ok(`REDIS_URL (${url}) resolves within the trust boundary`);
+} catch (error) {
+  error.isPolicyDenial && error.rule === "SOV-004"
+    ? bad(`${error.message}`)
+    : bad(`SOV-004 check threw unexpectedly: ${error.message}`);
 }
 
 console.log(
