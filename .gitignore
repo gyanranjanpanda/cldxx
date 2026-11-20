@@ -53,3 +53,9 @@ backend/services/agent/artifacts/
 # Local OS metadata
 .metadata_never_index
 backend/services/shared
+
+# Machine-specific CLDX runtime discovery
+.cldx/
+
+# Local tool overrides
+*.local

@@ -6,6 +6,9 @@ WORKDIR /app
 # Dependencies are baked in at build time. A sovereign host has no route to
 # npm, so anything not in the image is not available at runtime -- which is the
 # point, and the reason the offline bundle is a supported install path.
+COPY package*.json ./
+RUN npm ci --omit=dev
+
 COPY app/package*.json ./app/
 RUN cd app && npm ci --omit=dev
 

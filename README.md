@@ -76,16 +76,20 @@ Most AI platforms today are simple single-model chatbots or shallow wrappers aro
 
 ### 2. Backend Setup
 ```bash
+# Shared Redis dependencies used by both backend services
+cd backend
+npm ci
+
 # Main API Server
-cd backend/app
+cd app
 cp .env.example .env
-npm install
+npm ci
 npm run dev
 
 # Agent Service
 cd ../services/agent
 cp .env.example .env
-npm install
+npm ci
 npm run dev
 ```
 

@@ -27,20 +27,8 @@ const defaultWorkflowPath = path.join(
  "z_image_turbo_api.json"
 );
 
-const fallbackWorkflowPath = path.join(
- __dirname,
- "..", "..", "..", "..",
- "workflow_api.json"
-);
-
 // Resolves the API-format ComfyUI workflow graph.
-// Prioritizes config/z_image_turbo_api.json, then falls back to repo root.
-const workflowPath = async () => {
- if (process.env.COMFY_WORKFLOW) return process.env.COMFY_WORKFLOW;
- const configStamp = await stat(defaultWorkflowPath).catch(() => null);
- if (configStamp) return defaultWorkflowPath;
- return fallbackWorkflowPath;
-};
+const workflowPath = () => process.env.COMFY_WORKFLOW || defaultWorkflowPath;
 
 // Required header for all requests to ComfyUI over ngrok to bypass the free-tier
 // interstitial browser warning page which corrupts JSON responses and images.
@@ -156,7 +144,7 @@ let cached = null;
 
 const loadWorkflow = async () => {
 
- const file = await workflowPath();
+ const file = workflowPath();
 
  const stamp = await stat(file).catch(() => null);
 
