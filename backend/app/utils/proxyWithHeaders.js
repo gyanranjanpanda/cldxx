@@ -6,7 +6,7 @@ import { cloudRunIdentityToken } from "./cloudRunIdentity.js";
 // Keep the gateway slightly above the file limit for multipart boundaries and
 // the text fields that accompany the file.
 export const proxyWithUser =
-(serviceUrl)=>{
+(serviceUrl, { preservePath = false } = {})=>{
 
  const maxUploadMb = Number(process.env.MAX_UPLOAD_MB) || 20;
 
@@ -15,6 +15,10 @@ export const proxyWithUser =
   {
 
    limit: `${maxUploadMb + 2}mb`,
+
+   // Express removes the mounted prefix from req.url. Agent RPCs expect that,
+   // but artifact downloads are mounted under the same path on both services.
+   ...(preservePath ? { proxyReqPathResolver: (req) => req.originalUrl } : {}),
 
    proxyReqOptDecorator:
    (proxyReqOpts, srcReq)=>{
@@ -71,7 +75,7 @@ export const proxyWithUser =
       proxyReqOpts.headers[
        "x-user-avatar"
       ] =
-      srcReq.user.avatar
+      srcReq.user.avatar || "";
 
     }
 

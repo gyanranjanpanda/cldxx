@@ -103,7 +103,7 @@ app.use("/api/agent", protect, withSovereignPolicy, proxyWithUser(AGENT_SERVICE)
 // internal identity header, but it does send its cookie to this origin, so the
 // link's unguessability stops being the only control. The agent then checks the
 // artefact belongs to the user this proxy names.
-app.use("/artifacts", protect, proxyWithUser(AGENT_SERVICE));
+app.use("/artifacts", protect, proxyWithUser(AGENT_SERVICE, { preservePath: true }));
 
 app.use("/internal", requireInternalKey, json, internalRouter);
 
