@@ -1,6 +1,6 @@
 import { checkAgentLimit } from "../config/agentRateLimit.js";
 import { deductCredits } from "../utils/deductCredits.js";
-import { searchTool, wantsImages } from "../utils/tavily.js";
+import { getSearchTool, wantsImages } from "../utils/tavily.js";
 import { describeNow } from "../utils/now.js";
 
 // TavilySearch resolves with { error } rather than throwing when the key is
@@ -45,7 +45,7 @@ export const searchAgent = async (state) => {
     // The raw prompt ("what is the weather of bengaluru") matches evergreen
     // pages just as well as today's. Naming the date pushes the provider
     // towards the current reading.
-    const raw = await searchTool.invoke({
+    const raw = await getSearchTool(state).invoke({
       query: `${state.prompt} (as of ${now.dateOnly})`
     });
 

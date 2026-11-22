@@ -5,13 +5,20 @@ import { TavilySearch } from "@langchain/tavily";
 // indexed snippet -- that is what the chat agent should prefer.
 // advanced depth returns longer content chunks, so a number that sits below the
 // snippet fold ("humidity 75%") actually reaches the model.
-export const searchTool = new TavilySearch({
-  maxResults: 5,
-  topic: "general",
-  searchDepth: "advanced",
-  includeAnswer: true,
-  includeImages: true
-});
+// Search is optional in the low-cost cloud profile. Construct the client only
+// for a search turn, after the user's own key has been loaded.
+export const getSearchTool = (state = {}) => {
+  const tavilyApiKey = state.keys?.tavily || process.env.TAVILY_API_KEY;
+  if (!tavilyApiKey) throw new Error("Web search is unavailable: no Tavily key is configured.");
+  return new TavilySearch({
+    tavilyApiKey,
+    maxResults: 5,
+    topic: "general",
+    searchDepth: "advanced",
+    includeAnswer: true,
+    includeImages: true
+  });
+};
 
 // Tavily returns thumbnails for every search, so a time or weather lookup came
 // back with a row of stock clock photos above the answer. They are only worth
