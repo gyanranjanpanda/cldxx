@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useDispatch } from "react-redux";
 import { FcGoogle } from "react-icons/fc";
+import { signInWithPopup } from "firebase/auth";
+import { auth, googleProvider } from "../../firebase";
 import api from "../utils/axios";
 import { setUserData } from "../redux/user.slice";
 import GridScan from "../components/GridScan";
@@ -18,9 +20,8 @@ function Login() {
     setLoading(true);
     setError("");
     try {
-      const [{ signInWithPopup }, { auth, googleProvider }] = await Promise.all([
-        import("firebase/auth"), import("../../firebase")
-      ]);
+      // Open the popup in the click's user-activation window. Awaiting dynamic
+      // imports first lets the browser expire that activation and block it.
       const result = await signInWithPopup(auth, googleProvider);
       const token = await result.user.getIdToken();
       const { data } = await api.post(`/api/auth/login`, { token });
@@ -28,7 +29,9 @@ function Login() {
     } catch (err) {
       console.error("Firebase Login Error:", err);
       if (err?.code !== "auth/popup-closed-by-user" && err?.code !== "auth/cancelled-popup-request") {
-        const msg = err?.response?.data?.message || err?.message || err?.code || "Could not sign you in. Please try again.";
+        const msg = err?.code === "auth/popup-blocked"
+          ? "Your browser blocked the Google sign-in window. Allow pop-ups for this site and try again."
+          : err?.response?.data?.message || err?.message || err?.code || "Could not sign you in. Please try again.";
         setError(msg);
       }
     } finally {
