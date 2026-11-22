@@ -51,7 +51,8 @@ services:
       AGENT_SERVICE: http://agent:8003
       INTERNAL_API_KEY: "${INTERNAL_API_KEY:?set INTERNAL_API_KEY}"
       MCP_SECRET: "${MCP_SECRET:?set MCP_SECRET}"
-      FRONTEND_URL: "https://${SITE_DOMAIN:?set SITE_DOMAIN}"
+      FRONTEND_URL: "${FRONTEND_URL:?set FRONTEND_URL}"
+      ALLOWED_ORIGINS: "https://${SITE_DOMAIN:?set SITE_DOMAIN}"
       COOKIE_SECURE: "true"
       COOKIE_SAME_SITE: lax
       BILLING_ENABLED: "false"

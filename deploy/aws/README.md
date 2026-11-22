@@ -124,6 +124,18 @@ the agent have **no** published host ports (`docker compose ps`). Confirm that
 the public site redirects HTTP to HTTPS and that Firebase accepts its domain.
 Image generation needs a separate ComfyUI endpoint and is deliberately off.
 
+### Vercel frontend
+
+The repository's `frontend/vercel.json` routes `/api/` and `/artifacts/` to
+the Lightsail HTTPS hostname, then serves the Vite single-page app. Keep
+`VITE_SERVER_URL` unset in Vercel so browser requests and session cookies use
+the Vercel origin. Set the `VITE_FIREBASE_*` build variables from the same
+Firebase web app as this gateway. Set the Vercel project's Root Directory to
+`frontend`, authorize its production hostname in Firebase Authentication, and
+set `FRONTEND_URL` in this profile's `.env` to that HTTPS hostname. Restart the
+gateway with `sudo docker compose --env-file .env up -d app` after changing it.
+The original Lightsail hostname remains an allowed origin for fallback access.
+
 ## 7. Operate or remove it
 
 - Back up MongoDB, and test a restore. Back up the `.env`
