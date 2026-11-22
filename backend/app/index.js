@@ -75,7 +75,9 @@ app.get("/", (req, res) => {
 app.use("/api/auth", json, authRouter);
 app.use("/api/me", protect, getCurrentUser);
 app.use("/api/chat", protect, injectUser, withSovereignPolicy, json, chatRouter);
-app.use("/api/billing", protect, injectUser, json, billingRouter);
+if (process.env.BILLING_ENABLED !== "false") {
+  app.use("/api/billing", protect, injectUser, json, billingRouter);
+}
 app.use("/api/mcp", protect, injectUser, json, mcpRouter);
 app.use("/api/keys", protect, injectUser, json, keysRouter);
 app.use("/api/invites", protect, injectUser, json, inviteRouter);

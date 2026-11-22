@@ -1,5 +1,10 @@
 # CLDX deployment guide
 
+For the lowest setup cost on an account with usable AWS credits, see the
+[single-server Lightsail profile](deploy/aws/README.md). It is intended for a
+private cloud demo and keeps billing disabled. Check credit eligibility and
+expiry before creating resources.
+
 CLDX has two supported installation profiles. Deploy them separately; each profile has its own database, cache, vector store, secrets, and user origin. The hosted profile does not expose Sovereign Mode in its UI. The local profile requires Sovereign Mode for its local account.
 
 ## Hosted cloud profile

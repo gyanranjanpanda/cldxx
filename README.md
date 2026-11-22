@@ -104,3 +104,9 @@ npm run dev
 
 ## 📄 License
 MIT © [Gyan Ranjan Panda](https://github.com/gyanranjanpanda)
+
+## Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the hosted and sovereign options. The
+[AWS Lightsail guide](deploy/aws/README.md) is the quickest single-server cloud
+profile for a private demo when eligible AWS credits are available.

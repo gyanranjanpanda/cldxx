@@ -126,6 +126,17 @@ export const login = async (
     const decoded =
       await getAuth(app).verifyIdToken(token);
 
+    // A private demo should not give every Google account the platform's
+    // model quota. Hosted public sign-up remains available when unset.
+    const allowedEmails = (process.env.AUTH_ALLOWED_EMAILS || "")
+      .split(",")
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean);
+    if (allowedEmails.length &&
+        (!decoded.email_verified || !allowedEmails.includes(decoded.email?.toLowerCase()))) {
+      return res.status(403).json({ message: "This account is not invited to this deployment." });
+    }
+
     // Full decoded tokens carry personal data; the uid is enough to trace a login.
     console.log("Login verified for uid:", decoded.uid);
 

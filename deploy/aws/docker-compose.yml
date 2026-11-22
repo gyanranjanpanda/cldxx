@@ -1,0 +1,111 @@
+name: cldx-cloud-lite
+
+networks:
+  edge:
+  app:
+
+volumes:
+  mongo-data:
+  redis-data:
+  caddy-data:
+  caddy-config:
+  audit-log:
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    networks: [app]
+    command: ["mongod", "--bind_ip_all", "--wiredTigerCacheSizeGB", "0.5"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: cldxadmin
+      MONGO_INITDB_ROOT_PASSWORD: "${MONGO_PASSWORD:?set MONGO_PASSWORD}"
+    volumes:
+      - mongo-data:/data/db
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks: [app]
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    environment:
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?set REDIS_PASSWORD}"
+    volumes:
+      - redis-data:/data
+
+  app:
+    build:
+      context: ../../backend
+      dockerfile: app/Dockerfile
+    restart: unless-stopped
+    networks: [app]
+    depends_on: [mongo, redis]
+    volumes:
+      - ./secrets/firebase-service-account.json:/app/app/modules/auth/serviceAccount.json:ro
+    environment:
+      NODE_ENV: production
+      PORT: "8000"
+      MONGODB_URL: "mongodb://cldxadmin:${MONGO_PASSWORD:?set MONGO_PASSWORD}@mongo:27017/cldx?authSource=admin"
+      REDIS_URL: "redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD}@redis:6379"
+      AGENT_SERVICE: http://agent:8003
+      INTERNAL_API_KEY: "${INTERNAL_API_KEY:?set INTERNAL_API_KEY}"
+      MCP_SECRET: "${MCP_SECRET:?set MCP_SECRET}"
+      FRONTEND_URL: "https://${SITE_DOMAIN:?set SITE_DOMAIN}"
+      COOKIE_SECURE: "true"
+      COOKIE_SAME_SITE: lax
+      BILLING_ENABLED: "false"
+      AUTH_ALLOWED_EMAILS: "${AUTH_ALLOWED_EMAILS:?set AUTH_ALLOWED_EMAILS}"
+
+  agent:
+    build:
+      context: ../../backend
+      dockerfile: services/agent/Dockerfile
+    restart: unless-stopped
+    networks: [app]
+    depends_on: [mongo, redis]
+    volumes:
+      - audit-log:/app/services/agent/audit
+    environment:
+      NODE_ENV: production
+      PORT: "8003"
+      MONGODB_URL: "mongodb://cldxadmin:${MONGO_PASSWORD:?set MONGO_PASSWORD}@mongo:27017/cldx?authSource=admin"
+      REDIS_URL: "redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD}@redis:6379"
+      INTERNAL_API_URL: http://app:8000/internal
+      INTERNAL_API_KEY: "${INTERNAL_API_KEY:?set INTERNAL_API_KEY}"
+      GROQ_API_KEY: "${GROQ_API_KEY:?set GROQ_API_KEY}"
+      GOOGLE_API_KEY: "${GOOGLE_API_KEY:-}"
+      GROQ_MODEL: "${GROQ_MODEL:-openai/gpt-oss-120b}"
+      AWS_REGION: "${AWS_REGION:?set AWS_REGION}"
+      AWS_BUCKET_NAME: "${AWS_BUCKET_NAME:?set AWS_BUCKET_NAME}"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:?set AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:?set AWS_SECRET_ACCESS_KEY}"
+
+  web:
+    build:
+      context: ../../frontend
+      dockerfile: ../deploy/aws/Dockerfile.web
+      args:
+        VITE_FIREBASE_API_KEY: "${VITE_FIREBASE_API_KEY:?set VITE_FIREBASE_API_KEY}"
+        VITE_FIREBASE_AUTH_DOMAIN: "${VITE_FIREBASE_AUTH_DOMAIN:-}"
+        VITE_FIREBASE_PROJECT_ID: "${VITE_FIREBASE_PROJECT_ID:?set VITE_FIREBASE_PROJECT_ID}"
+        VITE_FIREBASE_APP_ID: "${VITE_FIREBASE_APP_ID:?set VITE_FIREBASE_APP_ID}"
+    restart: unless-stopped
+    networks: [edge, app]
+    depends_on: [app]
+    environment:
+      APP_URL: http://app:8000
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    networks: [edge]
+    depends_on: [web]
+    environment:
+      SITE_DOMAIN: "${SITE_DOMAIN:?set SITE_DOMAIN}"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
