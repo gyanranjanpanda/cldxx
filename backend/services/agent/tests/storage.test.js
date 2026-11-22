@@ -142,6 +142,21 @@ test("an artefact names its owner, so a download can be refused to anyone else",
 
 });
 
+test("the single-server cloud profile stores downloads locally without S3", async () => {
+  process.env.LOCAL_ARTIFACT_STORAGE = "true";
+  process.env.ARTIFACT_PUBLIC_URL = "https://example.test";
+  try {
+    const url = await storeArtifact(Buffer.from("CLOUD REPORT"), "report.pdf", "application/pdf", {
+      sovereign: false, userId: "cloud-user", conversationId: "cloud-conv", agent: "pdf"
+    });
+    assert.match(url, /^https:\/\/example\.test\/artifacts\/[a-f0-9]{64}\.pdf$/);
+    assert.equal(readArtifact(nameFrom(url)).userId, "cloud-user");
+  } finally {
+    delete process.env.LOCAL_ARTIFACT_STORAGE;
+    delete process.env.ARTIFACT_PUBLIC_URL;
+  }
+});
+
 test.after(() => {
   fs.rmSync(scratch, { recursive: true, force: true });
 });

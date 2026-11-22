@@ -34,6 +34,7 @@ import { audit } from "./audit.js";
 // cwd the process happened to start in -- and res.sendFile refuses it outright.
 export const SOVEREIGN_ARTIFACT_DIR =
  path.resolve(
+  process.env.ARTIFACT_DIR ||
   process.env.SOVEREIGN_ARTIFACT_DIR ||
   path.join(process.cwd(), "artifacts")
  );
@@ -99,7 +100,7 @@ async(buffer, fileName, contentType, state = {})=>{
  const sovereign =
   state.sovereign === true;
 
- if(sovereign){
+ if(sovereign || process.env.LOCAL_ARTIFACT_STORAGE === "true"){
 
   ensureDir();
 
@@ -140,11 +141,11 @@ async(buffer, fileName, contentType, state = {})=>{
 
    agent: state.agent,
 
-   zone: "SOVEREIGN",
+   zone: sovereign ? "SOVEREIGN" : "CLOUD",
 
    decision: "ALLOW",
 
-   rule: "SOV-004",
+   rule: sovereign ? "SOV-004" : "CLD-LOCAL-ARTIFACT",
 
    model: null,
 
@@ -153,7 +154,7 @@ async(buffer, fileName, contentType, state = {})=>{
   });
 
   const base =
-   process.env.SOVEREIGN_PUBLIC_URL || "";
+   process.env.ARTIFACT_PUBLIC_URL || process.env.SOVEREIGN_PUBLIC_URL || "";
 
   return `${base}/artifacts/${name}`;
 

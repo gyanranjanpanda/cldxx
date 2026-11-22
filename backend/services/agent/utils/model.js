@@ -61,6 +61,33 @@ const deepseekVision = (state) =>
     maxTokens: Number(process.env.VISION_MAX_OUTPUT_TOKENS) || 1024,
   });
 
+// A private hosted demo can run on Google's free API tier when no usable Groq
+// key is configured. User-supplied Groq keys still take precedence per turn.
+const textModel = (state, { maxTokens } = {}) => {
+  const groqKey = keyFor("groq", state);
+  if (groqKey) {
+    return new ChatGroq({
+      apiKey: groqKey,
+      model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
+      temperature: 0,
+      maxRetries: 2,
+      ...(maxTokens ? { maxTokens } : {})
+    });
+  }
+
+  const googleKey = keyFor("google", state);
+  if (googleKey) {
+    return new ChatGoogleGenerativeAI({
+      apiKey: googleKey,
+      model: process.env.GOOGLE_MODEL || "gemini-2.5-flash",
+      temperature: 0,
+      ...(maxTokens ? { maxOutputTokens: maxTokens } : {})
+    });
+  }
+
+  throw new Error("No cloud text model is configured. Set GROQ_API_KEY or GOOGLE_API_KEY.");
+};
+
 // `sovereign` is threaded in from the graph state rather than read from the
 // environment, because it is a property of the turn: the same deployment
 // answers an ordinary question from the cloud and a confidential one locally,
@@ -169,13 +196,7 @@ export const getModel =
      // A whole project has to fit in one reply, and gpt-oss spends part of its
      // budget on reasoning tokens before it emits any code -- too small a cap
      // truncates the last file mid-function.
-     return new ChatGroq({
-       apiKey: keyFor("groq", state),
-       model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
-       temperature: 0,
-       maxRetries: 2,
-       maxTokens: Number(process.env.CODING_MAX_TOKENS) || 16000,
-     });
+     return textModel(state, { maxTokens: Number(process.env.CODING_MAX_TOKENS) || 16000 });
 
    // PDF and PPT require reliable structured JSON output. Gemini 2.5 Flash
    // follows JSON instructions very consistently and stays the fallback here,
@@ -215,23 +236,13 @@ export const getModel =
    case "mcp":
      if (deepseekConfigured(state)) return deepseek(state);
 
-     return new ChatGroq({
-       apiKey: keyFor("groq", state),
-       model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
-       temperature: 0,
-       maxRetries: 2,
-     });
+     return textModel(state);
 
    // Chat is short text and the router classifies every single message, so
    // both stay on the fast, cheap model.
    case "chat":
    case "image":
    default:
-     return new ChatGroq({
-       apiKey: keyFor("groq", state),
-       model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
-       temperature: 0,
-       maxRetries: 2,
-     });
+     return textModel(state);
  }
 };
