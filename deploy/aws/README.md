@@ -7,8 +7,9 @@ Docker volume stores generated downloads, and Google's API handles model calls. 
 inference, image generation, cloud search, and persistent Qdrant indexing are
 off in this profile. Document retrieval uses the app's in-memory vector store.
 
-This is suited to a private demo and light use. It has one server and no high
-availability. Do not call it a zero-cost service: the instance and optional
+This is suited to a small demo and light use. It has one server and no high
+availability. Public sign-up is available with a limited trial credit balance.
+Do not call it a zero-cost service: the instance and optional
 snapshots accrue charges even while promotional credits pay the bill. Check
 your credit balance and expiry before creating resources. Generated downloads
 expire after 24 hours; back up the MongoDB volume for conversation history.
@@ -90,8 +91,12 @@ chmod 700 secrets
 chmod 600 .env
 ```
 
-Edit `.env` on the instance. Fill every blank value. Set `AUTH_ALLOWED_EMAILS`
-to the Google email addresses allowed to use this private demo (comma-separated).
+Edit `.env` on the instance. Fill every required blank value. Leave
+`AUTH_ALLOWED_EMAILS` blank to allow any verified Google account to join, or
+set a comma-separated list for a private deployment. `PUBLIC_SIGNUP_CREDITS`
+limits the initial app credits for each new account; it does not limit AWS
+charges or provider charges. Set provider-side quotas and billing alerts before
+inviting the public.
 Generate each of
 `MONGO_PASSWORD`, `REDIS_PASSWORD`, `INTERNAL_API_KEY`, and `MCP_SECRET` with
 `openssl rand -hex 24`. Use only the hostname in `SITE_DOMAIN`. If using the

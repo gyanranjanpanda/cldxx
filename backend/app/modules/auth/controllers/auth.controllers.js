@@ -126,14 +126,17 @@ export const login = async (
     const decoded =
       await getAuth(app).verifyIdToken(token);
 
-    // A private demo should not give every Google account the platform's
-    // model quota. Hosted public sign-up remains available when unset.
+    if (!decoded.email_verified || !decoded.email) {
+      return res.status(403).json({ message: "Sign in with a verified Google email address." });
+    }
+
+    // An optional allowlist keeps private deployments restricted. When unset,
+    // any verified Google account can create an account.
     const allowedEmails = (process.env.AUTH_ALLOWED_EMAILS || "")
       .split(",")
       .map((email) => email.trim().toLowerCase())
       .filter(Boolean);
-    if (allowedEmails.length &&
-        (!decoded.email_verified || !allowedEmails.includes(decoded.email?.toLowerCase()))) {
+    if (allowedEmails.length && !allowedEmails.includes(decoded.email.toLowerCase())) {
       return res.status(403).json({ message: "This account is not invited to this deployment." });
     }
 
@@ -172,6 +175,10 @@ export const login = async (
 
     if (!user) {
 
+      const configuredCredits = Number(process.env.PUBLIC_SIGNUP_CREDITS ?? 25);
+      const signupCredits = Number.isSafeInteger(configuredCredits) && configuredCredits >= 0
+        ? configuredCredits : 25;
+
       user =
         await User.create({
 
@@ -190,6 +197,9 @@ export const login = async (
           provider:
             decoded.firebase
               ?.sign_in_provider,
+
+          credits: signupCredits,
+          totalCredits: signupCredits,
         });
     }
 
