@@ -82,3 +82,12 @@ export const deductUserCredits = async ({ userId, agent }) => {
 
   return user;
 };
+
+export const refundUserCredits = async ({ userId, agent }) => {
+  const user = await User.findById(userId);
+  if (!user) throw new AuthError(404, "User not found");
+  if (user.plan !== "unlimited") user.credits += CREDIT_COST[agent] || 1;
+  await user.save();
+  await refreshSession(user);
+  return user;
+};

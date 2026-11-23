@@ -127,7 +127,14 @@ Open the HTTPS address, sign in with Google, send a short chat prompt, and
 generate a small document to verify its authenticated download. Check that MongoDB, Redis and
 the agent have **no** published host ports (`docker compose ps`). Confirm that
 the public site redirects HTTP to HTTPS and that Firebase accepts its domain.
-Image generation needs a separate ComfyUI endpoint and is deliberately off.
+Image generation needs a separate ComfyUI endpoint and is deliberately off by
+default. The backup image agent can use Pollinations when a server-side
+`POLLINATIONS_API_KEY` is set in `deploy/aws/.env`. It uses the current
+`gen.pollinations.ai/image` API and stores the result with the same local
+artifact service as PDF downloads. Pollinations usage is separate from AWS
+credits; check the account's image pricing and set a key budget before enabling
+it for public users. With neither provider configured, image requests return
+an unavailable message without deducting app credits.
 
 ### Vercel frontend
 

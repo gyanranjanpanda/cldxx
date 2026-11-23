@@ -372,7 +372,7 @@ const toggleMic = () => {
             open: true,
             title: "Z-Image Turbo is offline",
             message:
-              "Your ComfyUI server did not answer, so this image is being generated with the backup service instead."
+              "Your ComfyUI server did not answer. Trying the backup image provider if it is configured."
           });
 
         } else {

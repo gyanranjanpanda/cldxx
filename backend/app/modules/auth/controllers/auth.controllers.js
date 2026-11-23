@@ -5,7 +5,7 @@ import { getAuth }
 import User from "../models/user.model.js";
 import redis from "../../../../shared/redis/redis.js";
 import { app } from "../config/firebase.js";
-import { updateUserPlan, deductUserCredits } from "../auth.service.js";
+import { updateUserPlan, deductUserCredits, refundUserCredits } from "../auth.service.js";
 import { verifyLocalPassword } from "../localPassword.js";
 
 
@@ -385,4 +385,14 @@ export const deductCredits = async (req, res) => {
 
   }
 
+};
+
+export const refundCredits = async (req, res) => {
+  try {
+    const { userId, agent } = req.body;
+    const user = await refundUserCredits({ userId, agent });
+    return res.json({ success: true, credits: user.credits });
+  } catch (error) {
+    return res.status(error.status || 500).json({ success: false, message: error.message });
+  }
 };

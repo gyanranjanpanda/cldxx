@@ -2,7 +2,8 @@ import express from "express";
 
 import {
   updatePlan,
-  deductCredits
+  deductCredits,
+  refundCredits
 } from "../modules/auth/controllers/auth.controllers.js";
 
 import {
@@ -23,6 +24,7 @@ import { getKeysForAgent } from "../modules/keys/controllers/keys.controller.js"
 const router = express.Router();
 
 router.patch("/deduct-credits", deductCredits);
+router.patch("/refund-credits", refundCredits);
 router.patch("/update-plan", updatePlan);
 router.post("/save-message", saveMessage);
 router.get("/get-messages/:id", getMessages);

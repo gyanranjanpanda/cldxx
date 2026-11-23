@@ -1,10 +1,9 @@
 import axios from "axios";
-import { getModel } from "../utils/model.js";
 
-import { uploadToS3 } from "../utils/uploadToS3.js";
-import { getDownloadUrl } from "../utils/getDownloadUrl.js";
+import { storeArtifact } from "../utils/storage.js";
 import { checkAgentLimit } from "../config/agentRateLimit.js";
 import { deductCredits } from "../utils/deductCredits.js";
+import { internalApi } from "../utils/internalApi.js";
 
 const LINK_TTL_SECONDS = 24 * 60 * 60;
 
@@ -20,7 +19,18 @@ const LINK_TTL_SECONDS = 24 * 60 * 60;
 
 export const imageAgent = async (state) => {
 
+  let charged = false;
+
   try {
+
+    const apiKey = String(process.env.POLLINATIONS_API_KEY || "").trim();
+    if (!apiKey) {
+      return {
+        ...state,
+        response: "❌ **Image generation is unavailable.** This deployment has no backup image provider key. Image mode also needs a running ComfyUI server. No credits were used for this request.",
+        isError: true,
+      };
+    }
 
 await checkAgentLimit(
     state.userId,
@@ -33,50 +43,13 @@ await checkAgentLimit(
         "image"
 
     );
+    charged = true;
 
-
-    const llm =
-      getModel("image", state);
-
-    const promptResponse =
-      await llm.invoke(`
-
-You are an elite AI image prompt engineer.
-
-Convert the user request into a highly detailed image generation prompt.
-
-Requirements:
-
-- Cinematic lighting
-- Professional composition
-- Ultra realistic
-- High detail
-- Beautiful color palette
-- Sharp focus
-- 8K quality
-- Photorealistic
-- Depth of field
-- Professional photography
-- Stunning visuals
-
-Return only the image prompt.
-
-User Request:
-
-${state.prompt}
-
-`);
-
-    const enhancedPrompt =
-      promptResponse.content.trim();
 
     const imageUrl =
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(
-        enhancedPrompt
-      )}`;
+      `https://gen.pollinations.ai/image/${encodeURIComponent(state.prompt)}?model=${encodeURIComponent(process.env.POLLINATIONS_IMAGE_MODEL || "black-forest-labs/flux.1-schnell")}`;
 
-    // The upstream service is free and flaky, so a slow reply is normal and a
-    // hung one used to block the request forever -- there was no timeout at all.
+    // A slow reply is possible, but a hung one must not block the chat forever.
     let imageResponse = null;
     let lastError = null;
 
@@ -84,6 +57,7 @@ ${state.prompt}
 
       imageResponse = await axios
         .get(imageUrl, {
+          headers: { Authorization: `Bearer ${apiKey}` },
           responseType: "arraybuffer",
           timeout: 90000,
           validateStatus: () => true
@@ -144,8 +118,7 @@ ${state.prompt}
     const fileName =
       `image-${Date.now()}.${extension}`;
 
-    await uploadToS3(imageBuffer, fileName, mimeType);
-    const downloadUrl = await getDownloadUrl(fileName, LINK_TTL_SECONDS);
+    const downloadUrl = await storeArtifact(imageBuffer, fileName, mimeType, state);
 
     return {
 
@@ -164,6 +137,14 @@ ${state.prompt}
     };
 
   } catch (error) {
+
+    if (charged) {
+      try {
+        await internalApi.patch("/refund-credits", { userId: state.userId, agent: "image" });
+      } catch (refundError) {
+        console.error("Image credit refund failed:", refundError);
+      }
+    }
 
     console.log(
       "Image Agent Error:",
