@@ -81,7 +81,8 @@ services:
       GROQ_MODEL: "${GROQ_MODEL:-openai/gpt-oss-120b}"
       LOCAL_ARTIFACT_STORAGE: "true"
       ARTIFACT_DIR: /app/services/agent/artifacts
-      ARTIFACT_PUBLIC_URL: "https://${SITE_DOMAIN:?set SITE_DOMAIN}"
+      # Relative links keep the browser's Vercel session cookie on downloads.
+      ARTIFACT_PUBLIC_URL: ""
 
   web:
     build:

@@ -21,6 +21,21 @@ function MessageBubble({ role, content ,images}) {
     return `${baseUrl.replace(/\/+$/, "")}${url.startsWith("/") ? "" : "/"}${url}`;
   };
 
+  // Older chat messages contain absolute Lightsail artifact links. Route those
+  // local files through the current app origin so the session cookie is sent.
+  const resolveDownloadUrl = (href) => {
+    if (!href) return href;
+    try {
+      const url = new URL(href, window.location.origin);
+      if (/^\/artifacts\/[a-f0-9]{64}\.[a-z0-9]{1,8}$/i.test(url.pathname)) {
+        return `${window.location.origin}${url.pathname}`;
+      }
+    } catch {
+      return href;
+    }
+    return href;
+  };
+
 // Escape closes, and the chat behind is frozen -- without the lock a trackpad
 // scroll moves the conversation under the overlay while the picture stays put.
 useEffect(() => {
@@ -144,7 +159,7 @@ const markdown = (content || "")
 
     a: ({ href, children }) => (
       <a
-        href={href}
+        href={resolveDownloadUrl(href)}
         target="_blank"
         rel="noreferrer"
         className="text-blue-400 underline inline-flex items-center gap-1"

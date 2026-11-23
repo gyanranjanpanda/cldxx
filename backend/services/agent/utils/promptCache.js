@@ -1,7 +1,8 @@
 import { createHash } from "crypto";
 import redis from "../../../shared/redis/redis.js";
 
-// Prompt cache for expensive generation agents (coding, pdf, ppt).
+// Prompt cache for generated code. Document links are user-owned and expire
+// after 24 hours, so sharing or caching a PDF/PPT response is unsafe.
 //
 // Problem: user types "create a snake game" → 14,000 tokens, 10 credits, 8 sec.
 // Types same thing again in new conversation → burns another 10 credits for
@@ -19,8 +20,8 @@ import redis from "../../../shared/redis/redis.js";
 
 const CACHE_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
-// Only these agents justify the cache — they cost 10+ credits and 8-30 seconds.
-const CACHEABLE_AGENTS = new Set(["coding", "pdf", "ppt"]);
+// Only code output can be reused safely across users and conversations.
+const CACHEABLE_AGENTS = new Set(["coding"]);
 
 // Normalise so "Create Snake Game", "create snake game  " and
 // "CREATE SNAKE GAME" all hit the same key.
