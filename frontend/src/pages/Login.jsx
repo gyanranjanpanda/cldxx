@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useDispatch } from "react-redux";
 import { FcGoogle } from "react-icons/fc";
-import { signInWithPopup } from "firebase/auth";
+import { getRedirectResult, signInWithRedirect } from "firebase/auth";
 import { auth, googleProvider } from "../../firebase";
 import api from "../utils/axios";
 import { setUserData } from "../redux/user.slice";
@@ -15,25 +15,48 @@ function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
+  useEffect(() => {
+    if (localAuth) return;
+    let active = true;
+
+    const resolveRedirect = async () => {
+      setLoading(true);
+      try {
+        const result = await getRedirectResult(auth);
+        // A previous popup can have signed in to Firebase even when the API
+        // rejected that login. Reuse that verified Firebase session too.
+        await auth.authStateReady();
+        const user = result?.user || auth.currentUser;
+        if (user && active) {
+          const token = await user.getIdToken();
+          const { data } = await api.post(`/api/auth/login`, { token });
+          if (active) dispatch(setUserData(data.user));
+        }
+      } catch (err) {
+        if (active) {
+          console.error("Firebase Redirect Login Error:", err);
+          setError(err?.response?.data?.message || err?.message || err?.code || "Sign-in failed. Please try again.");
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    resolveRedirect();
+    return () => { active = false; };
+  }, [dispatch, localAuth]);
+
   const handleGoogleLogin = async () => {
     if (loading) return;
     setLoading(true);
     setError("");
+
     try {
-      // Open the popup in the click's user-activation window. Awaiting dynamic
-      // imports first lets the browser expire that activation and block it.
-      const result = await signInWithPopup(auth, googleProvider);
-      const token = await result.user.getIdToken();
-      const { data } = await api.post(`/api/auth/login`, { token });
-      dispatch(setUserData(data.user));
+      // A full-page redirect works in browsers that block OAuth popups.
+      await signInWithRedirect(auth, googleProvider);
     } catch (err) {
-      console.error("Firebase Login Error:", err);
-      if (err?.code !== "auth/popup-closed-by-user" && err?.code !== "auth/cancelled-popup-request") {
-        const msg = err?.code === "auth/popup-blocked"
-          ? "Your browser blocked the Google sign-in window. Allow pop-ups for this site and try again."
-          : err?.response?.data?.message || err?.message || err?.code || "Could not sign you in. Please try again.";
-        setError(msg);
-      }
+      console.error("Firebase Redirect Login Error:", err);
+      setError(err?.message || err?.code || "Could not start Google sign-in. Please try again.");
     } finally {
       setLoading(false);
     }

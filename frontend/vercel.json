@@ -2,6 +2,14 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/__/auth/:path*",
+      "destination": "https://cldxx-1c0f9.firebaseapp.com/__/auth/:path*"
+    },
+    {
+      "source": "/__/firebase/init.json",
+      "destination": "https://cldxx-1c0f9.firebaseapp.com/__/firebase/init.json"
+    },
+    {
       "source": "/api/:path*",
       "destination": "https://13.235.26.189.sslip.io/api/:path*"
     },
