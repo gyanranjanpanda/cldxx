@@ -138,8 +138,10 @@ the Vercel origin. Set the `VITE_FIREBASE_*` build variables from the same
 Firebase web app as this gateway. Set the Vercel project's Root Directory to
 `frontend`, authorize its production hostname in Firebase Authentication, and
 set `VITE_FIREBASE_AUTH_DOMAIN` to that hostname without `https://`. The
-`/__/auth/` and `/__/firebase/init.json` rewrites in `frontend/vercel.json`
-serve Firebase's sign-in helper through the same origin. In Google Auth Platform,
+The `/__/auth/` rewrite in `frontend/vercel.json` serves Firebase's sign-in
+helper through the same origin. The Vite build generates
+`/__/firebase/init.json` from the frontend's Firebase environment variables;
+this file must return JSON from the deployed site. In Google Auth Platform,
 add `https://<frontend-hostname>` as an authorized JavaScript origin and
 `https://<frontend-hostname>/__/auth/handler` as an authorized redirect URI
 on the Firebase Google provider's web client. Redeploy the frontend after
