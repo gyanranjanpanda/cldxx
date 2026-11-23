@@ -137,7 +137,15 @@ the Lightsail HTTPS hostname, then serves the Vite single-page app. Keep
 the Vercel origin. Set the `VITE_FIREBASE_*` build variables from the same
 Firebase web app as this gateway. Set the Vercel project's Root Directory to
 `frontend`, authorize its production hostname in Firebase Authentication, and
-set `FRONTEND_URL` in this profile's `.env` to that HTTPS hostname. Restart the
+set `VITE_FIREBASE_AUTH_DOMAIN` to that hostname without `https://`. The
+`/__/auth/` and `/__/firebase/init.json` rewrites in `frontend/vercel.json`
+serve Firebase's sign-in helper through the same origin. In Google Auth Platform,
+add `https://<frontend-hostname>` as an authorized JavaScript origin and
+`https://<frontend-hostname>/__/auth/handler` as an authorized redirect URI
+on the Firebase Google provider's web client. Redeploy the frontend after
+changing the build variable. Firebase's redirect flow needs all of these
+settings to work in browsers that block third-party storage. Set
+`FRONTEND_URL` in this profile's `.env` to that HTTPS hostname. Restart the
 gateway with `sudo docker compose --env-file .env up -d app` after changing it.
 The original Lightsail hostname remains an allowed origin for fallback access.
 
