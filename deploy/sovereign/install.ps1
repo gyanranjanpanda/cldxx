@@ -18,6 +18,7 @@ function Get-EnvValue([string]$key) {
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     throw 'Install and start Docker Desktop before running this installer.'
 }
+Write-Host 'Checking Docker engine...'
 Invoke-Docker info --format '{{.ServerVersion}}' | Out-Null
 Invoke-Docker compose version | Out-Null
 

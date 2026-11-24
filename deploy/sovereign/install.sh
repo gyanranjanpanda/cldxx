@@ -7,7 +7,20 @@ env_file="$PWD/.env"
 
 command -v docker >/dev/null || { echo "Install Docker Desktop or Docker Engine first." >&2; exit 1; }
 command -v openssl >/dev/null || { echo "OpenSSL is needed to create the local key." >&2; exit 1; }
-docker info >/dev/null 2>&1 || { echo "Start Docker, then run this installer again." >&2; exit 1; }
+echo "Checking Docker engine (up to 20 seconds)..."
+docker info >/dev/null 2>&1 &
+docker_check_pid=$!
+( sleep 20; kill -TERM "$docker_check_pid" >/dev/null 2>&1 || true ) &
+docker_timer_pid=$!
+if wait "$docker_check_pid"; then
+  kill "$docker_timer_pid" >/dev/null 2>&1 || true
+  wait "$docker_timer_pid" 2>/dev/null || true
+else
+  kill "$docker_timer_pid" >/dev/null 2>&1 || true
+  wait "$docker_timer_pid" 2>/dev/null || true
+  echo "Docker is not ready. Open Docker Desktop, wait for the engine to start, then rerun ./install.sh." >&2
+  exit 1
+fi
 docker compose version >/dev/null || { echo "Docker Compose v2 is required." >&2; exit 1; }
 
 if [[ ! -f "$env_file" ]]; then
