@@ -110,3 +110,5 @@ MIT © [Gyan Ranjan Panda](https://github.com/gyanranjanpanda)
 See [DEPLOYMENT.md](DEPLOYMENT.md) for the hosted and sovereign options. The
 [AWS Lightsail guide](deploy/aws/README.md) is the quickest single-server cloud
 profile for a private demo when eligible AWS credits are available.
+To run Sovereign Mode on each user's own computer, follow the
+[local installer guide](deploy/sovereign/README.md#install-on-each-users-own-computer).

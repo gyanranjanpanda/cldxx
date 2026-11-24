@@ -39,7 +39,7 @@ After deployment, confirm Google sign-in, a chat turn, document export, a restar
 
 ## Sovereign profile
 
-See [deploy/sovereign/README.md](deploy/sovereign/README.md). It runs without cloud credentials or Google sign-in. The local account is forced to `sovereign_only`; local models, embeddings, vectors, history, and artifacts stay in the installation. The default web port binds only to loopback; expose it through an HTTPS reverse proxy with host firewall rules.
+See [deploy/sovereign/README.md](deploy/sovereign/README.md). Each user can run `install.sh` or `install.ps1` on their own computer; no shared server is required. It runs without cloud credentials or Google sign-in. The local account is forced to `sovereign_only`; local models, embeddings, vectors, history, and artifacts stay in that installation. The default web port binds only to loopback. A dedicated server operator must add an HTTPS reverse proxy and host firewall rules before allowing remote access.
 
 ## Release gates
 

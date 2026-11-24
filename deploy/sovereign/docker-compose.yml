@@ -30,6 +30,10 @@ services:
     image: "${OLLAMA_IMAGE:-ollama/ollama:latest}"
     networks: [internal]
     restart: unless-stopped
+    environment:
+      # Keep laptop installs from loading several large models at once.
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_NUM_PARALLEL: "1"
     volumes:
       - ollama-models:/root/.ollama
     # Uncomment on a GPU host. Without it Ollama runs on CPU, which is fine for
@@ -79,10 +83,11 @@ services:
       MONGODB_URL: "mongodb://mongo:27017/cldx"
       REDIS_URL: "redis://redis:6379"
       AGENT_SERVICE: "http://agent:8003"
-      FRONTEND_URL: "${FRONTEND_URL:-http://localhost:8080}"
+      FRONTEND_URL: "${FRONTEND_URL:-http://127.0.0.1:8080}"
       INTERNAL_API_KEY: "${INTERNAL_API_KEY:?set INTERNAL_API_KEY in .env}"
       SOVEREIGN_MONGODB_URL: "mongodb://mongo:27017/cldx_sovereign"
       LOCAL_AUTH_ENABLED: "true"
+      BILLING_ENABLED: "false"
       LOCAL_AUTH_USERNAME: "${LOCAL_AUTH_USERNAME:?set LOCAL_AUTH_USERNAME in .env}"
       LOCAL_AUTH_PASSWORD_HASH: "${LOCAL_AUTH_PASSWORD_HASH:?set LOCAL_AUTH_PASSWORD_HASH in .env}"
       COOKIE_SECURE: "${COOKIE_SECURE:-false}"
@@ -114,7 +119,7 @@ services:
       SOVEREIGN_EMBEDDING_MODEL: "${SOVEREIGN_EMBEDDING_MODEL:-nomic-embed-text}"
       SOVEREIGN_QDRANT_URL: "http://qdrant:6333"
       SOVEREIGN_ARTIFACT_DIR: "/app/services/agent/artifacts"
-      SOVEREIGN_PUBLIC_URL: "${SOVEREIGN_PUBLIC_URL:-http://localhost:8080}"
+      SOVEREIGN_PUBLIC_URL: "${SOVEREIGN_PUBLIC_URL:-http://127.0.0.1:8080}"
       AUDIT_LOG_PATH: "/app/services/agent/audit/decisions.log"
 
       # No cloud credentials or route out of the internal Docker network.

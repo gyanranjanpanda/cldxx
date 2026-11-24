@@ -2,6 +2,36 @@
 
 This profile runs the web UI, gateway, agent, MongoDB, Redis, Qdrant, and Ollama on one Docker host. The application network is `internal: true`; the default profile has no egress proxy, cloud model credentials, or external authentication. The browser is outside the Docker network, so host firewall and workstation controls still matter.
 
+## Install on each user's own computer
+
+Each person installs their own copy. Their models, account, conversations, and artifacts stay in Docker volumes on **their computer**. This does not connect to the hosted CLDX account or your AWS server. Installation downloads code, images, and models; the running application network is isolated. The default web port is bound to the local loopback address, so there is no public deployment link.
+
+Requirements: Git, a running Docker Desktop (macOS/Windows) or Docker Engine with Compose v2 (Linux), enough free disk for models and containers, and preferably at least 8 GB of memory available to Docker. The installer selects smaller 1.5B chat and coding models plus a compact vision model; responses will be less capable than larger models. CPU-only inference may be slow.
+
+macOS or Linux:
+
+```bash
+git clone https://github.com/gyanranjanpanda/cldxx.git
+cd cldxx/deploy/sovereign
+./install.sh
+```
+
+Windows PowerShell:
+
+```powershell
+git clone https://github.com/gyanranjanpanda/cldxx.git
+cd cldxx\deploy\sovereign
+.\install.ps1
+```
+
+Create a password when prompted, then open **http://127.0.0.1:8080** on that same computer and sign in as `admin`. The installer creates a private `.env`, downloads models into a local Docker volume, builds and starts the services, and checks that the application network is isolated. Do not share the `.env` file. Running the installer again reuses the same account and volumes.
+
+To use larger models, edit `SOVEREIGN_MODEL`, `SOVEREIGN_CODING_MODEL`, and `SOVEREIGN_VISION_MODEL` in your local `.env`, then rerun the installer to download them. To stop without deleting data, run `docker compose down` from this directory. To update, run `git pull` and rerun the installer.
+
+This local profile supports local chat, coding, embeddings, and image *inputs*. It does not provide image generation; the hosted ComfyUI ngrok endpoint cannot be reached from the isolated application network.
+
+The manual Linux server installation below is for operators who need a separate dedicated host. Users installing on personal computers should use the commands above.
+
 ## Prepare
 
 Use a Linux host with Docker Compose and enough memory for the selected models. Enable the Docker GPU reservation in `docker-compose.yml` on a GPU host. Put TLS in front of the web port before exposing the site to other machines.
@@ -35,7 +65,7 @@ docker compose up -d
 
 Wait for the model loader to answer `docker exec cldx-model-loader ollama list` before pulling. If `OLLAMA_IMAGE` is pinned to a digest, use that same image in the loader command. Pulling after the offline Compose stack starts cannot work because its network has no route out.
 
-Open `http://localhost:8080` for local testing. Sign in with the local account from `.env`. Sovereign conversations persist in the local `cldx_sovereign` MongoDB database, separate from the ordinary `cldx` database. Back up both MongoDB databases, Redis, Qdrant, the `ollama-models` volume, the audit log, and artifacts according to your retention policy.
+Open `http://127.0.0.1:8080` for local testing. Sign in with the local account from `.env`. Sovereign conversations persist in the local `cldx_sovereign` MongoDB database, separate from the ordinary `cldx` database. Back up both MongoDB databases, Redis, Qdrant, the `ollama-models` volume, the audit log, and artifacts according to your retention policy.
 
 ## Transfer to an offline host
 

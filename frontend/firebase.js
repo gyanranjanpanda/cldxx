@@ -12,12 +12,16 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase safely for HMR
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+// Local Sovereign installations use their own account and have no Firebase key.
+// Avoid creating Auth in that build: getAuth() throws auth/invalid-api-key even
+// when the Google sign-in button is hidden.
+const app = import.meta.env.VITE_LOCAL_AUTH_ENABLED === "true"
+  ? null
+  : getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-export const auth=getAuth(app)
+export const auth=app ? getAuth(app) : null
 export const googleProvider =
-  new GoogleAuthProvider();
+  app ? new GoogleAuthProvider() : null;
 
 export const githubProvider =
-  new GithubAuthProvider();
+  app ? new GithubAuthProvider() : null;
