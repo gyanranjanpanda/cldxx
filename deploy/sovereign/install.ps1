@@ -19,7 +19,21 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     throw 'Install and start Docker Desktop before running this installer.'
 }
 Write-Host 'Checking Docker engine...'
-Invoke-Docker info --format '{{.ServerVersion}}' | Out-Null
+$dockerCheck = Start-Job -ScriptBlock {
+    & docker info --format '{{.ServerVersion}}' *> $null
+    $LASTEXITCODE
+}
+try {
+    if (-not (Wait-Job $dockerCheck -Timeout 20)) {
+        Stop-Job $dockerCheck
+        throw 'Docker is not ready. Open Docker Desktop, wait for the engine to start, then rerun .\install.ps1.'
+    }
+    $dockerExit = Receive-Job $dockerCheck
+    if ($dockerExit -ne 0) {
+        throw 'Docker is not ready. Open Docker Desktop, wait for the engine to start, then rerun .\install.ps1.'
+    }
+}
+finally { Remove-Job $dockerCheck -Force }
 Invoke-Docker compose version | Out-Null
 
 if (-not (Test-Path $envFile)) {

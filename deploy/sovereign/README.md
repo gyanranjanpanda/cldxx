@@ -6,7 +6,9 @@ This profile runs the web UI, gateway, agent, MongoDB, Redis, Qdrant, and Ollama
 
 Each person installs their own copy. Their models, account, conversations, and artifacts stay in Docker volumes on **their computer**. This does not connect to the hosted CLDX account or your AWS server. Installation downloads code, images, and models; the running application network is isolated. The default web port is bound to the local loopback address, so there is no public deployment link.
 
-Requirements: Git, a running Docker Desktop (macOS/Windows) or Docker Engine with Compose v2 (Linux), enough free disk for models and containers, and preferably at least 8 GB of memory available to Docker. The installer selects smaller 1.5B chat and coding models plus a compact vision model; responses will be less capable than larger models. CPU-only inference may be slow.
+Requirements: a running Docker Desktop (macOS/Windows) or Docker Engine with Compose v2 (Linux), enough free disk for models and containers, and preferably at least 8 GB of memory available to Docker. The installer selects smaller 1.5B chat and coding models plus a compact vision model; responses will be less capable than larger models. CPU-only inference may be slow. Mobile devices and machines that cannot run Docker are not supported.
+
+The repository is public. Each user can either use Git as shown below or download the [source ZIP](https://github.com/gyanranjanpanda/cldxx/archive/refs/heads/master.zip), extract it, and run the installer from `cldxx-master/deploy/sovereign`. With a ZIP download, use `bash install.sh` on macOS/Linux. On Windows, review `install.ps1`; if PowerShell blocks a downloaded file, run `Unblock-File .\install.ps1` before `./install.ps1`.
 
 macOS or Linux:
 

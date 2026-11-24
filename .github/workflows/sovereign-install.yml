@@ -1,0 +1,72 @@
+name: Sovereign local install
+
+on:
+  push:
+    paths:
+      - '.github/workflows/sovereign-install.yml'
+      - 'deploy/sovereign/**'
+      - 'frontend/firebase.js'
+  pull_request:
+    paths:
+      - '.github/workflows/sovereign-install.yml'
+      - 'deploy/sovereign/**'
+      - 'frontend/firebase.js'
+
+permissions:
+  contents: read
+
+jobs:
+  unix-installer:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: bash -n deploy/sovereign/install.sh
+      - run: bash deploy/sovereign/tests/install-smoke.sh
+
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile('deploy/sovereign/install.ps1', [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count) { throw ($errors | Out-String) }
+          ./deploy/sovereign/tests/install-smoke.ps1
+
+  local-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build local-only frontend
+        working-directory: frontend
+        env:
+          VITE_LOCAL_AUTH_ENABLED: 'true'
+          VITE_SOVEREIGN_ONLY: 'true'
+          VITE_SOVEREIGN_AVAILABLE: 'true'
+          VITE_BILLING_ENABLED: 'false'
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Validate isolated Compose profile
+        working-directory: deploy/sovereign
+        env:
+          INTERNAL_API_KEY: check
+          LOCAL_AUTH_USERNAME: admin
+          LOCAL_AUTH_PASSWORD_HASH: check
+        run: docker compose config --quiet
