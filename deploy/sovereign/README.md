@@ -28,6 +28,13 @@ cd cldxx\deploy\sovereign
 
 Create a password when prompted, then open **http://127.0.0.1:8080** on that same computer and sign in as `admin`. The installer creates a private `.env`, downloads models into a local Docker volume, builds and starts the services, and checks that the application network is isolated. Do not share the `.env` file. Running the installer again reuses the same account and volumes.
 
+If you forget the local password, reset it on that computer. The command prompts twice without showing the password, changes only the password hash in `.env`, and recreates the app container. Conversations, models, and artifacts remain in their volumes.
+
+```bash
+cd cldxx/deploy/sovereign
+./reset-password.sh
+```
+
 To use larger models, edit `SOVEREIGN_MODEL`, `SOVEREIGN_CODING_MODEL`, and `SOVEREIGN_VISION_MODEL` in your local `.env`, then rerun the installer to download them. To stop without deleting data, run `docker compose down` from this directory. To update, run `git pull` and rerun the installer.
 
 This local profile supports local chat, coding, embeddings, and image *inputs*. It does not provide image generation; the hosted ComfyUI ngrok endpoint cannot be reached from the isolated application network.
