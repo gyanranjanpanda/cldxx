@@ -137,3 +137,6 @@ foreach ($service in @('app', 'agent')) {
 }
 Write-Host "Sovereign Mode is ready at http://127.0.0.1:$webPort"
 Write-Host 'Sign in as admin with the password you created on this computer.'
+# The final containment probe intentionally returns 1 when egress is blocked.
+# Clear that native exit code so a successful installer reports success.
+$global:LASTEXITCODE = 0
