@@ -110,7 +110,7 @@ services:
       PORT: "8003"
       MONGODB_URL: "mongodb://mongo:27017/cldx"
       REDIS_URL: "redis://redis:6379"
-      INTERNAL_API_URL: "http://app:8000"
+      INTERNAL_API_URL: "http://app:8000/internal"
       INTERNAL_API_KEY: "${INTERNAL_API_KEY:?set INTERNAL_API_KEY in .env}"
 
       # Sovereign Mode. One base URL serves chat, coding, vision and embeddings.
