@@ -126,7 +126,7 @@ export const addMessage = async (
   conversationId,
   role,
   content,
-  { sovereign = false } = {}
+  { sovereign = false, artifacts = [] } = {}
 ) => {
 
   // No write down: a sovereign turn only ever touches the restricted tier.
@@ -136,7 +136,7 @@ export const addMessage = async (
 
   const messages = (await readTier(key)) || [];
 
-  messages.push({ role, content, at: Date.now() });
+  messages.push({ role, content, artifacts, at: Date.now() });
 
   // Trimmed per tier. A sovereign turn cannot push a cloud turn out of the
   // cloud tier, which would be a write-down by eviction.

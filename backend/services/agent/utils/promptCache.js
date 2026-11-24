@@ -1,12 +1,12 @@
 import { createHash } from "crypto";
 import redis from "../../../shared/redis/redis.js";
 
-// Prompt cache for generated code. Document links are user-owned and expire
-// after 24 hours, so sharing or caching a PDF/PPT response is unsafe.
+// Prompt cache is disabled for generation agents until a context-aware,
+// user-scoped key can be used.
 //
-// Problem: user types "create a snake game" → 14,000 tokens, 10 credits, 8 sec.
-// Types same thing again in new conversation → burns another 10 credits for
-// identical output.
+// Reusing a prompt-only result can expose another user's generated project or
+// return stale code when a follow-up depends on the previous project files.
+// PDF/PPT links are user-owned and may expire, so those are not cached either.
 //
 // Fix: SHA-256 hash of (normalised prompt + agent + sovereign) → Redis key.
 // Cache hit = 0 credits, 0 LLM call, <5ms response.
@@ -20,8 +20,7 @@ import redis from "../../../shared/redis/redis.js";
 
 const CACHE_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
-// Only code output can be reused safely across users and conversations.
-const CACHEABLE_AGENTS = new Set(["coding"]);
+const CACHEABLE_AGENTS = new Set();
 
 // Normalise so "Create Snake Game", "create snake game  " and
 // "CREATE SNAKE GAME" all hit the same key.

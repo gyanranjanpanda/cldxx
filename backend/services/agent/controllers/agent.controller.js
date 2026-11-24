@@ -114,7 +114,7 @@ export const chat = async (req, res, next) => {
           conversationId,
           "assistant",
           result.response,
-          { sovereign: isSovereignTurn }
+          { sovereign: isSovereignTurn, artifacts: result.artifacts || [] }
         );
 
         if (!isIncognito) {
