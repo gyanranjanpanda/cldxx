@@ -15,6 +15,10 @@ jobs:
       LOCAL_AUTH_USERNAME: admin
       FRONTEND_URL: http://127.0.0.1:8080
       SOVEREIGN_PUBLIC_URL: http://127.0.0.1:8080
+      SOVEREIGN_MODEL: qwen2.5:1.5b
+      SOVEREIGN_CODING_MODEL: qwen2.5-coder:1.5b
+      SOVEREIGN_VISION_MODEL: moondream:1.8b
+      SOVEREIGN_EMBEDDING_MODEL: nomic-embed-text
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,23 +28,44 @@ jobs:
         run: |
           hash=$(LOCAL_AUTH_NEW_PASSWORD='ci-local-password-12345' node backend/app/scripts/hash-local-password.mjs)
           echo "LOCAL_AUTH_PASSWORD_HASH=$hash" >> "$GITHUB_ENV"
-      - name: Build and start local stack
+      - name: Build local images
         working-directory: deploy/sovereign
+        run: docker compose build --quiet
+      - name: Download a local chat model
         run: |
-          docker compose build --quiet
-          docker compose up -d
-      - name: Check local sign-in and containment
+          docker volume create cldx-sovereign_ollama-models
+          docker run -d --name cldx-ci-model-loader --network bridge \
+            -v cldx-sovereign_ollama-models:/root/.ollama ollama/ollama:latest serve
+          for i in $(seq 1 30); do
+            if docker exec cldx-ci-model-loader ollama list >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          docker exec cldx-ci-model-loader ollama pull qwen2.5:1.5b
+          docker rm -f cldx-ci-model-loader
+      - name: Start local stack
+        working-directory: deploy/sovereign
+        run: docker compose up -d
+      - name: Check local chat, sign-in and containment
         working-directory: deploy/sovereign
         run: |
           response=$(mktemp)
+          cookie=$(mktemp)
           for i in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:8080/api/auth/local-login \
               -H 'content-type: application/json' \
               -d '{"username":"admin","password":"ci-local-password-12345"}' \
-              -o "$response"; then break; fi
+              -c "$cookie" -o "$response"; then break; fi
             sleep 2
           done
           python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["user"]["sovereignPolicy"] == "sovereign_only"; print("local login passed")' "$response"
+          conversation=$(curl -fsS http://127.0.0.1:8080/api/chat/create-conversation \
+            -H 'content-type: application/json' -b "$cookie" -d '{"sovereign":true}' \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["_id"])')
+          curl -fsS --max-time 180 http://127.0.0.1:8080/api/agent/chat \
+            -b "$cookie" -F "conversationId=$conversation" -F 'sovereign=true' \
+            -F 'incognito=false' -F 'prompt=Say hello in one short sentence.' \
+            -F 'agent=chat' -F 'timezone=UTC' -o "$response"
+          python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["zone"] == "SOVEREIGN" and d["answer"].strip(); print("local chat passed:", d["answer"][:120])' "$response"
           ./verify-containment.sh
       - name: Show service logs on failure
         if: failure()
