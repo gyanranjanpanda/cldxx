@@ -9,9 +9,12 @@ name: cldx-sovereign
 networks:
 
   internal:
-    # The whole boundary is this one line: no gateway, no route out, enforced
-    # by the kernel rather than by policy.
+    # Models, state and application services have no route out.
     internal: true
+
+  ingress:
+    # The web proxy also needs a normal bridge for its loopback-published port
+    # to be reachable from the host. No data or model service joins this bridge.
 
 volumes:
   mongo-data:
@@ -135,7 +138,7 @@ services:
         VITE_SOVEREIGN_ONLY: "true"
         VITE_SOVEREIGN_AVAILABLE: "true"
         VITE_BILLING_ENABLED: "false"
-    networks: [internal]
+    networks: [internal, ingress]
     restart: unless-stopped
     depends_on: [app]
     volumes:

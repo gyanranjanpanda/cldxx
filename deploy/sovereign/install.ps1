@@ -126,10 +126,19 @@ for ($i = 0; $i -lt 45; $i++) {
 if (-not $servicesReady) { throw 'CLDX services did not become healthy. Check docker compose logs.' }
 $internal = (Invoke-Docker network inspect -f '{{.Internal}}' cldx-sovereign_internal | Select-Object -Last 1).Trim()
 if ($internal -ne 'true') { throw 'Containment check failed: network is not internal.' }
+$ingress = (Invoke-Docker network inspect -f '{{.Internal}}' cldx-sovereign_ingress | Select-Object -Last 1).Trim()
+if ($ingress -ne 'false') { throw 'Containment check failed: web ingress bridge is missing.' }
 foreach ($service in @('app', 'agent', 'mongo', 'redis', 'qdrant', 'ollama', 'web')) {
     $container = Invoke-Docker compose --env-file $envFile ps --status running -q $service
     if (-not $container) { throw "Containment check failed: $service is not running." }
 }
+foreach ($service in @('app', 'agent', 'mongo', 'redis', 'qdrant', 'ollama')) {
+    $container = Invoke-Docker compose --env-file $envFile ps -q $service
+    $attached = Invoke-Docker inspect -f '{{if index .NetworkSettings.Networks "cldx-sovereign_ingress"}}attached{{end}}' $container
+    if ($attached) { throw "Containment check failed: $service joined the ingress bridge." }
+}
+$binding = (Invoke-Docker compose --env-file $envFile port web 80 | Select-Object -Last 1).Trim()
+if (-not $binding.StartsWith('127.0.0.1:')) { throw 'Containment check failed: web port is not bound to loopback.' }
 foreach ($service in @('app', 'agent')) {
     & docker compose --env-file $envFile exec -T $service node -e `
         'fetch("http://1.1.1.1/", { signal: AbortSignal.timeout(6000) }).then(() => process.exit(0), () => process.exit(1))' *> $null

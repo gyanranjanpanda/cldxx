@@ -1,6 +1,6 @@
 # Sovereign installation
 
-This profile runs the web UI, gateway, agent, MongoDB, Redis, Qdrant, and Ollama on one Docker host. The application network is `internal: true`; the default profile has no egress proxy, cloud model credentials, or external authentication. The browser is outside the Docker network, so host firewall and workstation controls still matter.
+This profile runs the web UI, gateway, agent, MongoDB, Redis, Qdrant, and Ollama on one Docker host. The gateway, agent, models, and data stores use an `internal: true` network with no route out. Only the web proxy also joins an ingress bridge so its loopback-published port works. The default profile has no cloud model credentials or external authentication. The browser is outside the Docker network, so host firewall and workstation controls still matter.
 
 ## Install on each user's own computer
 

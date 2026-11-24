@@ -45,7 +45,9 @@ jobs:
       - name: Show service logs on failure
         if: failure()
         working-directory: deploy/sovereign
-        run: docker compose logs --tail=60
+        run: |
+          docker compose ps
+          docker compose logs --tail=30 app agent web
       - name: Stop test stack
         if: always()
         working-directory: deploy/sovereign

@@ -14,6 +14,12 @@ else
   fail "application network is not internal"
 fi
 
+if [ "$(docker network inspect -f '{{.Internal}}' "${project}_ingress" 2>/dev/null)" = false ]; then
+  pass "web ingress bridge exists"
+else
+  fail "web ingress bridge is unavailable"
+fi
+
 for service in app agent mongo redis qdrant ollama web; do
   if [ -n "$(docker compose ps --status running -q "$service")" ]; then
     pass "$service is running"
@@ -40,11 +46,22 @@ for service in app agent; do
 done
 
 for service in app agent mongo redis qdrant ollama; do
+  container="$(docker compose ps -q "$service")"
+  if [ -n "$container" ] && [ -z "$(docker inspect -f '{{if index .NetworkSettings.Networks "cldx-sovereign_ingress"}}attached{{end}}' "$container" 2>/dev/null)" ]; then
+    pass "$service is isolated from ingress"
+  else
+    fail "$service joined the ingress bridge"
+  fi
   if docker compose ps "$service" --format '{{.Publishers}}' | grep -Eq '[0-9]+:[0-9]+'; then
     fail "$service publishes a host port"
   else
     pass "$service has no published host port"
   fi
 done
+
+case "$(docker compose port web 80 2>/dev/null)" in
+  127.0.0.1:*) pass "web port binds to loopback" ;;
+  *) fail "web port is not bound to loopback" ;;
+esac
 
 exit "$failed"
