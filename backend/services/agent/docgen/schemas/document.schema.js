@@ -324,6 +324,7 @@ export function validateDocument(raw) {
  * @returns {unknown | null}
  */
 export function extractJson(str) {
+  if (typeof str !== "string") return null;
   const stripped = str.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
   const start = stripped.indexOf("{");
   const end   = stripped.lastIndexOf("}");

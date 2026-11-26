@@ -53,8 +53,11 @@ export const pdfAgent = async (state) => {
     };
   } catch (error) {
     const status = error?.status ?? error?.response?.status;
+    const code = ["PDF_PLANNER_OUTPUT", "PDF_WRITER_OUTPUT"].find((value) => value === error?.code);
+    const frames = String(error?.stack || "").split("\n").slice(1, 6)
+      .flatMap((line) => line.match(/docgen\/[\w/.-]+:\d+:\d+/) ?? []);
     console.error("[pdfAgent] Generation failed", {
-      conversationId: state.conversationId, status, errorType: error?.name,
+      conversationId: state.conversationId, status, errorType: error?.name, code, frames,
     });
     if (charged) {
       try {
@@ -112,6 +115,14 @@ export const pdfAgent = async (state) => {
       return {
         ...state,
         response: "❌ **PDF service temporarily unavailable**\n\nThe AI provider is at capacity. Try again shortly.",
+        isError: true,
+      };
+    }
+
+    if (code) {
+      return {
+        ...state,
+        response: "❌ **PDF content could not be generated**\n\nThe AI returned incomplete document content. Try again with a short description of what the PDF should cover.",
         isError: true,
       };
     }

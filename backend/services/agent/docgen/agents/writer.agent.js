@@ -17,7 +17,7 @@
  */
 
 import { getModel, invokePdfModel } from "../../utils/model.js";
-import { extractJson } from "../schemas/document.schema.js";
+import { Block, extractJson } from "../schemas/document.schema.js";
 import { getLayout, wordBudget } from "../design/layouts.js";
 import { bus }         from "../events/bus.js";
 
@@ -168,11 +168,14 @@ Write this section only.`;
   ]);
 
   const parsed = extractJson(response.text ?? response.content ?? "");
-  return finishSection(spec, layout, budget, parsed?.blocks, jobId);
+  const blocks = Array.isArray(parsed?.blocks)
+    ? parsed.blocks.filter((block) => Block.safeParse(block).success)
+    : [];
+  return finishSection(spec, layout, budget, blocks, jobId);
 }
 
 function finishSection(spec, layout, budget, blocks, jobId) {
-  if (!Array.isArray(blocks) || !blocks.length || blocks.some((block) => !block || typeof block.type !== "string")) {
+  if (!blocks.some((block) => block.type !== "heading")) {
     console.warn(`[writer] Section "${spec.name}" returned invalid blocks — using fallback`);
     return [
       { type: "heading", text: spec.name, level: 1 },
@@ -208,19 +211,35 @@ async function writeCloudPdfSections(sections, context, jobId) {
   });
   const blockTypes = new Set(specs.flatMap((section) => section.blockTypes));
   const blockExamples = [...blockTypes].map((type) => BLOCK_SPECS[type]).filter(Boolean).join("\n");
-  const response = await invokePdfModel({ ...context.modelState, sovereign: false }, [
-    { role: "system", content: `Write all the planned sections of a PDF. Return a single JSON object with the shape
+  const system = `Write all the planned sections of a PDF. Return a single JSON object with the shape
 {"sections":[{"id":"the given ID","blocks":[...]}]}. Include each requested section exactly once and use only its allowed block types.
 Stay within each section's word budget. Use concrete examples and plain prose. Do not invent data; label illustrative numbers as examples.
 Block formats:
-${blockExamples}` },
-    { role: "user", content: JSON.stringify({ topic: context.topic, tone: context.style, sections: specs }) },
-  ]);
-  const parsed = extractJson(response.text ?? response.content ?? "");
-  if (!Array.isArray(parsed?.sections)) throw new Error("PDF writer returned invalid sections");
-  const blocksById = new Map(parsed.sections.filter(Boolean).map((section) => [section.id, section.blocks]));
-  if (!sections.every((section) => Array.isArray(blocksById.get(section.id)) && blocksById.get(section.id).length)) {
-    throw new Error("PDF writer did not return content for every section");
+${blockExamples}`;
+  const blocksById = new Map();
+  let missing = specs;
+  for (let attempt = 0; attempt < 2 && missing.length; attempt++) {
+    const response = await invokePdfModel({ ...context.modelState, sovereign: false }, [
+      { role: "system", content: system },
+      { role: "user", content: JSON.stringify({ topic: context.topic, tone: context.style, sections: missing }) },
+    ]);
+    const parsed = extractJson(response.text ?? response.content ?? "");
+    const returned = Array.isArray(parsed?.sections) ? parsed.sections : [];
+    const requested = new Map(missing.map((section) => [section.id, section]));
+    for (const section of returned) {
+      const spec = requested.get(section?.id);
+      if (!spec || !Array.isArray(section.blocks)) continue;
+      // Keep the raw blocks until the document validator escapes text. Validate
+      // here before word counting or layout code reads generated fields.
+      const valid = section.blocks.filter((block) =>
+        Block.safeParse(block).success && Object.hasOwn(BLOCK_SPECS, block.type)
+      );
+      if (valid.some((block) => block.type !== "heading")) blocksById.set(spec.id, valid);
+    }
+    missing = missing.filter((section) => !blocksById.has(section.id));
+  }
+  if (missing.length) {
+    throw Object.assign(new Error("PDF writer could not create every section"), { code: "PDF_WRITER_OUTPUT" });
   }
 
   return sections.flatMap((section) => {

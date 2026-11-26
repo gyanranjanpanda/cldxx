@@ -75,15 +75,20 @@ export async function plan(topic, opts = {}) {
 
   const parsed = extractJson(response.text ?? response.content ?? "");
 
-  if (!parsed || !Array.isArray(parsed.sections) || parsed.sections.length === 0) {
-    throw new Error("Planner returned invalid outline JSON");
+  const usableSections = Array.isArray(parsed?.sections)
+    ? parsed.sections.filter((section) => typeof section?.name === "string" && section.name.trim())
+    : [];
+  if (!usableSections.length) {
+    throw Object.assign(new Error("Planner returned an invalid outline"), { code: "PDF_PLANNER_OUTPUT" });
   }
 
   // Drop layouts the model invented, then enforce rhythm structurally. The prompt
   // asks for variety; this guarantees it even when the model ignores the ask.
-  const cleaned = parsed.sections.map((s, i) => ({
+  const cleaned = usableSections.map((s, i) => ({
     ...s,
-    id:     s.id || `s${i + 1}`,
+    id:     `s${i + 1}`,
+    name:   s.name.trim().slice(0, 300),
+    description: typeof s.description === "string" ? s.description.slice(0, 4000) : s.name,
     layout: LAYOUTS[s.layout] && !LAYOUTS[s.layout].structural ? s.layout : "bullets",
   }));
 
@@ -97,5 +102,7 @@ export async function plan(topic, opts = {}) {
     corrections: changes,
   });
 
-  return { title: parsed.title ?? topic, subtitle: parsed.subtitle ?? "", sections };
+  const title = typeof parsed.title === "string" && parsed.title.trim() ? parsed.title : topic;
+  const subtitle = typeof parsed.subtitle === "string" ? parsed.subtitle : "";
+  return { title: title.slice(0, 300), subtitle: subtitle.slice(0, 300), sections };
 }

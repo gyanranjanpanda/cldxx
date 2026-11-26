@@ -48,6 +48,7 @@ const googlePdf = (state, model) => new ChatGoogleGenerativeAI({
   model,
   apiKey: keyFor("google", state),
   temperature: 0,
+  json: true,
   maxRetries: 0,
 });
 
