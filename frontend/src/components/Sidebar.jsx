@@ -128,7 +128,7 @@ export default function Sidebar() {
     } finally { setTransferBusy(false); }
   };
 
-  const importCloudContent = async (event) => {
+  const importChatHistory = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
@@ -136,14 +136,18 @@ export default function Sidebar() {
     setTransferNotice("");
     try {
       const response = await api.post("/api/transfer/import", file, {
-        headers: { "Content-Type": "application/zip" }
+        headers: { "Content-Type": "application/octet-stream" }
       });
       const result = response.data;
       dispatch(setConversations(await getConversations()));
-      setTransferNotice(`Imported ${result.conversations} chats, ${result.messages} messages, and ${result.artifacts} files.` +
-        (result.missingArtifacts ? ` ${result.missingArtifacts} older files were unavailable.` : ""));
+      setTransferNotice(result.provider
+        ? `Imported ${result.conversations} ${result.provider} chats and ${result.messages} text messages. Attachments were skipped.`
+        : `Imported ${result.conversations} chats, ${result.messages} messages, and ${result.artifacts} files.` +
+          (result.missingArtifacts ? ` ${result.missingArtifacts} older files were unavailable.` : ""));
     } catch (error) {
-      setTransferNotice(error.response?.data?.message || "Could not import this ZIP file.");
+      setTransferNotice(error.response?.status === 413
+        ? "This archive exceeds the upload limit. Try importing the extracted conversation JSON files individually."
+        : error.response?.data?.message || "Could not import this chat export.");
     } finally { setTransferBusy(false); }
   };
 
@@ -713,12 +717,15 @@ export default function Sidebar() {
             {userData && (
               <div className="pb-2">
                 {isLocalSovereign ? (
-                  <label className={`${navRow(false)} relative`}>
-                    <Upload size={15} className="shrink-0 text-slate-400" />
-                    {transferBusy ? "Importing…" : "Import cloud content"}
-                    <input type="file" accept=".zip,application/zip" disabled={transferBusy}
-                      onChange={importCloudContent} className="absolute inset-0 opacity-0 cursor-pointer" />
-                  </label>
+                  <>
+                    <label className={`${navRow(false)} relative focus-within:ring-1 focus-within:ring-blue-400`}>
+                      <Upload size={15} className="shrink-0 text-slate-400" />
+                      {transferBusy ? "Importing…" : "Import chat history"}
+                      <input type="file" accept=".zip,.json,application/zip,application/json" disabled={transferBusy}
+                        onChange={importChatHistory} className="absolute inset-0 opacity-0 cursor-pointer" />
+                    </label>
+                    <p className="px-3 text-[11px] text-slate-400">ChatGPT, Claude, or CLDX exports</p>
+                  </>
                 ) : (
                   <button onClick={exportCloudContent} disabled={transferBusy} className={navRow(false)}>
                     <Download size={15} className="shrink-0 text-slate-400" />

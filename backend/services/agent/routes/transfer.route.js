@@ -7,6 +7,7 @@ import crypto from "crypto";
 import redis from "../../../shared/redis/redis.js";
 import { requireGateway } from "../middlewares/requireGateway.js";
 import { readArtifact, SOVEREIGN_ARTIFACT_DIR } from "../utils/storage.js";
+import { ProviderExportError, readProviderExport } from "../utils/providerExport.js";
 
 const router = express.Router();
 router.use(requireGateway);
@@ -90,12 +91,15 @@ router.post("/import", express.raw({ type: ["application/zip", "application/octe
   if (process.env.SOVEREIGN_IMPORT_ENABLED !== "true") return failure(res, 404, "Import is unavailable here");
   const userId = req.headers["x-user-id"];
   if (!userId) return failure(res, 401, "Missing identity");
-  if (!Buffer.isBuffer(req.body) || req.body.length < 4) return failure(res, 400, "Choose a CLDX export ZIP file");
+  if (!Buffer.isBuffer(req.body) || !req.body.length) return failure(res, 400, "Choose a ChatGPT, Claude, or CLDX export file.");
   try {
-    const zip = await JSZip.loadAsync(req.body);
-    const entry = zip.file("manifest.json");
-    if (!entry || entry._data.uncompressedSize > 64 * 1024 * 1024) return failure(res, 400, "Invalid CLDX archive");
-    const manifest = JSON.parse(await entry.async("string"));
+    const zip = req.body.subarray(0, 2).toString() === "PK" ? await JSZip.loadAsync(req.body) : null;
+    const entry = zip?.file("manifest.json");
+    if (entry?._data.uncompressedSize > 64 * 1024 * 1024) return failure(res, 400, "Invalid CLDX archive");
+    const externalExport = !entry;
+    if (externalExport && req.headers["x-sovereign-policy"] !== "sovereign_only")
+      return failure(res, 404, "Provider imports are available only in Sovereign Mode.");
+    const manifest = entry ? JSON.parse(await entry.async("string")) : await readProviderExport(req.body, zip);
     if (manifest.format !== "cldx-cloud-content" || manifest.version !== 1 ||
         !limited(manifest.sourceUserId, 256) || !manifest.sourceUserId ||
         !Array.isArray(manifest.conversations) || manifest.conversations.length > 10000 ||
@@ -152,7 +156,11 @@ router.post("/import", express.raw({ type: ["application/zip", "application/octe
         userId, createdAt: Date.now(), expiresAt: null
       }), { mode: 0o600 });
     }
-    const db = mongoose.connection.db;
+    const importDatabase = process.env.SOVEREIGN_IMPORT_DATABASE;
+    if (externalExport && (!importDatabase || importDatabase === mongoose.connection.db.databaseName)) {
+      return failure(res, 503, "The Sovereign conversation database is unavailable.");
+    }
+    const db = externalExport ? mongoose.connection.getClient().db(importDatabase) : mongoose.connection.db;
     const conversations = db.collection("conversations");
     const messages = db.collection("messages");
     for (const row of manifest.conversations) {
@@ -162,14 +170,13 @@ router.post("/import", express.raw({ type: ["application/zip", "application/octe
         createdAt: new Date(row.createdAt || Date.now()),
         updatedAt: new Date(row.updatedAt || Date.now())
       } }, { upsert: true });
-      await redis.del(`conversation:${_id}`);
     }
     for (const row of manifest.messages) {
       const _id = localId("message", userId, manifest.sourceUserId, row.id);
       const conversationId = localId("conversation", userId, manifest.sourceUserId, row.conversationId);
       await messages.updateOne({ _id }, { $setOnInsert: {
         _id, conversationId, role: row.role,
-        content: rewrite(row.content),
+        content: externalExport ? row.content : rewrite(row.content),
         images: row.images.map(rewrite),
         artifacts: JSON.parse(JSON.stringify(row.artifacts), (_key, value) => rewrite(value)),
         guest: row.guest === true,
@@ -177,13 +184,18 @@ router.post("/import", express.raw({ type: ["application/zip", "application/octe
         updatedAt: new Date(row.updatedAt || Date.now())
       } }, { upsert: true });
     }
+    for (const row of manifest.conversations) {
+      const id = localId("conversation", userId, manifest.sourceUserId, row.id);
+      await redis.del(externalExport ? `conversation:${id}:sov` : `conversation:${id}`);
+    }
     res.set("Cache-Control", "private, no-store");
     return res.json({ success: true, conversations: manifest.conversations.length,
-      messages: manifest.messages.length, artifacts: artifactFiles.length,
+      messages: manifest.messages.length, artifacts: artifactFiles.length, provider: externalExport ? manifest.provider : undefined,
       missingArtifacts: (manifest.missingArtifacts?.length || 0) + unavailableImages.size });
   } catch (error) {
+    if (error instanceof ProviderExportError) return failure(res, 400, error.message);
     if (error instanceof SyntaxError || /zip|corrupt|invalid/i.test(error.message))
-      return failure(res, 400, "Invalid CLDX archive");
+      return failure(res, 400, "Invalid conversation export. Choose an intact ZIP or conversation JSON file.");
     return next(error);
   }
 });

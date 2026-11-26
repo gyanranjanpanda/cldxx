@@ -245,6 +245,26 @@ export const getMessages = async (req, res) => {
 
 };
 
+export const getOwnedMessages = async (req, res) => {
+  const userId = req.user?.userId;
+  const { id } = req.params;
+  if (!userId) return res.sendStatus(401);
+  if (!mongoose.isValidObjectId(id)) return res.json([]);
+
+  try {
+    const filter = { _id: id, userId: String(userId) };
+    const restricted = sovereignModels();
+    const [cloudOwner, localOwner] = await Promise.all([
+      Conversation.exists(filter),
+      restricted?.Conversation.exists(filter)
+    ]);
+    if (!cloudOwner && !localOwner) return res.sendStatus(404);
+    return getMessages(req, res);
+  } catch {
+    return res.status(500).json({ message: "Could not load this chat." });
+  }
+};
+
 export const updateConversation = async (req, res) => {
 
   try {

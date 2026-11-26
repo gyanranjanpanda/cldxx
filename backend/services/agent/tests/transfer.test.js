@@ -96,4 +96,78 @@ test("cloud refuses import and local refuses export", async () => {
   assert.equal((await run(route("/export"), { headers: {} })).code, 404);
 });
 
+test("ChatGPT ZIP and Claude JSON import searchable text into the restricted database only", async () => {
+  process.env.SOVEREIGN_IMPORT_ENABLED = "true";
+  process.env.SOVEREIGN_IMPORT_DATABASE = "local-restricted";
+  const restricted = { conversations: new Map(), messages: new Map() };
+  mongoose.connection.db = { databaseName: "primary", collection() { assert.fail("wrote to primary database"); } };
+  const client = mongoose.connection.client;
+  mongoose.connection.client = {
+    db(name) {
+      assert.equal(name, "local-restricted");
+      return { collection(table) {
+        return { async updateOne({ _id }, { $setOnInsert }) {
+          if (!restricted[table].has(String(_id))) restricted[table].set(String(_id), $setOnInsert);
+        } };
+      } };
+    }
+  };
+  const node = (parent, role, text) => ({
+    parent, message: { author: { role }, content: { content_type: "text", parts: [text] } }
+  });
+  const gpt = [{
+    id: "shared-source-id", title: "River research",
+    current_node: "report", create_time: 1710000000,
+    mapping: {
+      base: node(null, "system", "skip system"),
+      question: node("base", "user", "Compare the river basins."),
+      report: node("question", "assistant", "# River report\n[Reference](https://example.org/report)"),
+      alternate: node("question", "assistant", "skip alternate branch")
+    }
+  }];
+  const claude = [{
+    uuid: "shared-source-id", name: "Wetlands notes", created_at: "2024-03-09T16:00:00Z",
+    chat_messages: [
+      { uuid: "q", sender: "human", text: "List wetland species." },
+      { uuid: "a", sender: "assistant", content: [
+        { type: "thinking", thinking: "skip thinking" },
+        { type: "text", text: "The study includes marsh birds." }
+      ] }
+    ],
+    api_key: "skip account metadata"
+  }];
+  const archive = new JSZip();
+  archive.file("export/conversations-001.json", JSON.stringify(gpt));
+  archive.file("export/conversations-002.json", "[]");
+  archive.file("export/user.json", '{"private":"skip account metadata"}');
+  const headers = { "x-user-id": "local-admin", "x-sovereign-policy": "sovereign_only" };
+  const importFile = (body) => run(route("/import"), { headers, body });
+  try {
+    const zip = await archive.generateAsync({ type: "nodebuffer" });
+    assert.equal((await run(route("/import"), {
+      headers: { "x-user-id": "local-admin", "x-sovereign-policy": "cloud_only" }, body: zip
+    })).code, 404);
+    const first = await importFile(zip);
+    assert.equal(first.code, 200);
+    assert.equal(first.body.provider, "ChatGPT");
+    assert.equal((await importFile(Buffer.from(JSON.stringify(gpt)))).code, 200);
+    const second = await importFile(Buffer.from(JSON.stringify(claude)));
+    assert.equal(second.code, 200);
+    assert.equal(second.body.provider, "Claude");
+    assert.equal((await importFile(Buffer.from('{"other":"data"}'))).code, 400);
+    assert.equal(restricted.conversations.size, 2);
+    assert.deepEqual([...restricted.conversations.values()].map((chat) => [chat.userId, chat.title]), [
+      ["local-admin", "River research"], ["local-admin", "Wetlands notes"]
+    ]);
+    assert.deepEqual([...restricted.messages.values()].map((message) => [message.role, message.content]), [
+      ["user", "Compare the river basins."],
+      ["assistant", "# River report\n[Reference](https://example.org/report)"],
+      ["user", "List wetland species."],
+      ["assistant", "The study includes marsh birds."]
+    ]);
+  } finally {
+    mongoose.connection.client = client;
+  }
+});
+
 test.after(() => { fs.rmSync(scratch, { recursive: true, force: true }); });
