@@ -86,12 +86,24 @@ export const pdfAgent = async (state) => {
 
     if (isProviderRateLimit(error)) {
       const dailyQuota = /per day|perday|daily quota/i.test(error?.message || "");
+      const quotaOwner = state.keys?.google || state.keys?.deepseek
+        ? "Your API key’s project"
+        : "The AI provider";
       console.warn("[pdfAgent] Provider quota reached", { conversationId: state.conversationId, dailyQuota });
       return {
         ...state,
         response: dailyQuota
-          ? "❌ **Cloud PDF quota reached**\n\nThe AI provider has reached its daily quota. Try again after the quota resets."
-          : "❌ **Cloud PDF rate limit**\n\nThe AI provider is temporarily limiting PDF requests. Try again later.",
+          ? `❌ **Cloud PDF quota reached**\n\n${quotaOwner} has reached its daily quota. Try again after the quota resets.`
+          : `❌ **Cloud PDF rate limit**\n\n${quotaOwner} is temporarily rate limited. Try again later.`,
+        isError: true,
+      };
+    }
+
+    if (charged && (state.keys?.google || state.keys?.deepseek) &&
+        (status === 401 || status === 403 || /API_KEY_INVALID/i.test(error?.message || ""))) {
+      return {
+        ...state,
+        response: "❌ **PDF API key rejected**\n\nThe provider rejected your saved key. Check that it is active and can use the model, then replace it in API Keys.",
         isError: true,
       };
     }

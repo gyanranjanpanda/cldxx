@@ -4,6 +4,7 @@ const SENSITIVE_KEY_PATTERNS = [
   /bearer\s+[a-zA-Z0-9_\-\.]+/gi,
   /(?:api[_-]?key|secret|password|token)["']?\s*[:=]\s*["']?([a-zA-Z0-9_\-\.]{8,})/gi,
   /gsk_[a-zA-Z0-9]{20,}/g, // Groq
+  /\b(?:AQ\.[A-Za-z0-9_-]{20,}|AIza[A-Za-z0-9_-]{30,})/g, // Google Gemini
   /sk-[a-zA-Z0-9]{20,}/g,  // OpenAI/DeepSeek
 ];
 

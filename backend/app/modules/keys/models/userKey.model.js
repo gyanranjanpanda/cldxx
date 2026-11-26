@@ -28,8 +28,8 @@ export const PROVIDERS = {
   google: {
     label:   "Google Gemini",
     envVar:  "GOOGLE_API_KEY",
-    pattern: /^AIza[A-Za-z0-9_-]{30,}$/,
-    hint:    "Starts with AIza — aistudio.google.com/apikey"
+    pattern: /^(?:AQ\.[A-Za-z0-9_-]{20,512}|AIza[A-Za-z0-9_-]{30,128})$/,
+    hint:    "Copy an API key from Google AI Studio (AQ. or AIza)."
   },
 
   tavily: {

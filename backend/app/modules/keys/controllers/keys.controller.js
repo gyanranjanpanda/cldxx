@@ -49,13 +49,20 @@ const verifyKey = async (provider, key) => {
     }
 
     if (provider === "google") {
-      // The key rides in a query parameter for this API, so it is never put in
-      // a header here on purpose.
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`,
-        { signal: timeout }
-      );
-      return res.ok ? { ok: true } : { ok: false, error: `Google rejected the key (HTTP ${res.status})` };
+      const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models", {
+        headers: { "x-goog-api-key": key },
+        redirect: "error",
+        signal: timeout,
+      });
+      if (res.ok) return { ok: true };
+      if ([400, 401, 403].includes(res.status)) {
+        return {
+          ok: false,
+          rejected: true,
+          error: "Google rejected this key. Check that it is active and has permission to use the Gemini API.",
+        };
+      }
+      return { ok: false, error: `Google could not verify the key (HTTP ${res.status}).` };
     }
 
     if (provider === "tavily") {
@@ -78,7 +85,7 @@ const verifyKey = async (provider, key) => {
       ok: false,
       error: error.name === "TimeoutError"
         ? "The provider did not answer in time — the key was saved but not verified"
-        : `Could not reach the provider — the key was saved but not verified (${error.message})`
+        : "Could not reach the provider. The key was saved but could not be verified."
     };
 
   }
@@ -145,6 +152,7 @@ export const saveKey = async (req, res) => {
     }
 
     const check = await verifyKey(provider, key);
+    if (check.rejected) return badRequest(res, check.error);
 
     const doc = await UserKey.findOneAndUpdate(
       { userId, provider },
@@ -228,6 +236,7 @@ export const getKeysForAgent = async (req, res) => {
 
   try {
 
+    res.set("Cache-Control", "no-store");
     const keys = await UserKey.find({
       userId:  req.params.userId,
       enabled: true
@@ -235,16 +244,17 @@ export const getKeysForAgent = async (req, res) => {
 
     const byProvider = {};
 
-    keys.forEach((doc) => {
-
+    for (const doc of keys) {
       const secret = decryptSecret(doc.key);
-
-      // A failed decrypt returns "" rather than throwing (the key material was
-      // rotated, say). Handing that to a provider would look like an auth
-      // failure the user cannot explain, so it is treated as absent instead.
-      if (secret) byProvider[doc.provider] = secret;
-
-    });
+      if (!secret) {
+        return res.status(503).json({
+          success: false,
+          code: "PROVIDER_KEY_UNREADABLE",
+          message: "A saved API key could not be read. Replace it or disable it in API Keys.",
+        });
+      }
+      byProvider[doc.provider] = secret;
+    }
 
     res.json({ success: true, keys: byProvider });
 
