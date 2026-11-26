@@ -58,14 +58,19 @@ jobs:
             sleep 2
           done
           python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["user"]["sovereignPolicy"] == "sovereign_only"; print("local login passed")' "$response"
-          for route in keys mcp/servers invites shared/example transfer/export agent/image/status/example; do
+          for route in keys mcp/providers mcp/oauth/slack/start invites shared/example transfer/export agent/image/status/example; do
             code=$(curl -sS -o /dev/null -w '%{http_code}' -b "$cookie" "http://127.0.0.1:8080/api/$route")
             test "$code" = 404
           done
-          for route in auth/login speech/transcribe agent/image/generate agent/mcp/health; do
+          for route in auth/login speech/transcribe agent/image/generate; do
             code=$(curl -sS -o /dev/null -w '%{http_code}' -b "$cookie" -H 'content-type: application/json' -d '{}' "http://127.0.0.1:8080/api/$route")
             test "$code" = 404
           done
+          curl -fsS -b "$cookie" http://127.0.0.1:8080/api/mcp/servers -o "$response"
+          python3 -c 'import json,sys; assert json.load(open(sys.argv[1]))["stdioAllowed"]' "$response"
+          code=$(curl -sS -o "$response" -w '%{http_code}' -b "$cookie" -H 'content-type: application/json' \
+            -d '{"name":"disallowed","transport":"http","url":"https://example.com/mcp"}' http://127.0.0.1:8080/api/mcp/servers)
+          test "$code" = 400
           conversation=$(curl -fsS http://127.0.0.1:8080/api/chat/create-conversation \
             -H 'content-type: application/json' -b "$cookie" -d '{"sovereign":true}' \
             | python3 -c 'import json,sys; print(json.load(sys.stdin)["_id"])')

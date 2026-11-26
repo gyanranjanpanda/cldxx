@@ -22,6 +22,9 @@ export const stdioAllowed = () =>
   (process.env.NODE_ENV !== "production" &&
    process.env.MCP_ALLOW_STDIO !== "false");
 
+const localOnly = () => process.env.SOVEREIGN_ONLY === "true";
+const serverFilter = (userId) => localOnly() ? { userId, transport: "stdio" } : { userId };
+
 const MAX_SERVERS_PER_USER = 20;
 const OAUTH_STATE_TTL_SECONDS = 600;
 
@@ -176,6 +179,7 @@ const validate = (body) => {
   if (name.length > 60) return "Name is too long";
 
   const transport = body.transport || "http";
+  if (localOnly() && transport !== "stdio") return "Sovereign Mode supports local stdio servers only.";
 
   if (!["http", "sse", "stdio"].includes(transport)) {
     return "Unknown transport";
@@ -218,7 +222,7 @@ export const listServers = async (req, res) => {
     const userId = req.headers["x-user-id"];
 
     const servers = await McpServer
-      .find({ userId })
+      .find(serverFilter(userId))
       .sort({ createdAt: 1 });
 
     res.json({
@@ -441,7 +445,7 @@ export const updateServer = async (req, res) => {
 
     const userId = req.headers["x-user-id"];
 
-    const existing = await McpServer.findOne({ _id: req.params.id, userId });
+    const existing = await McpServer.findOne({ _id: req.params.id, ...serverFilter(userId) });
 
     if (!existing) {
       return res.status(404).json({ success: false, message: "Server not found" });
@@ -497,7 +501,7 @@ export const toggleServer = async (req, res) => {
     const userId = req.headers["x-user-id"];
 
     const server = await McpServer.findOneAndUpdate(
-      { _id: req.params.id, userId },
+      { _id: req.params.id, ...serverFilter(userId) },
       { enabled: Boolean(req.body.enabled) },
       { new: true }
     );
@@ -522,7 +526,7 @@ export const deleteServer = async (req, res) => {
 
     const userId = req.headers["x-user-id"];
 
-    const server = await McpServer.findOneAndDelete({ _id: req.params.id, userId });
+    const server = await McpServer.findOneAndDelete({ _id: req.params.id, ...serverFilter(userId) });
 
     if (!server) {
       return res.status(404).json({ success: false, message: "Server not found" });
@@ -548,7 +552,8 @@ export const getServersForAgent = async (req, res) => {
 
     const { userId } = req.params;
 
-    const query = { userId };
+    if (localOnly() && !stdioAllowed()) return res.json({ success: true, stdioAllowed: false, servers: [] });
+    const query = serverFilter(userId);
 
     if (req.query.enabled === "true") query.enabled = true;
     if (req.query.id) query._id = req.query.id;
@@ -599,7 +604,7 @@ export const saveServerStatus = async (req, res) => {
     const list = Array.isArray(tools) ? tools : [];
 
     const server = await McpServer.findOneAndUpdate(
-      { _id: serverId, userId },
+      { _id: serverId, ...serverFilter(userId) },
       {
         status: {
           state:     state === "ok" ? "ok" : "error",

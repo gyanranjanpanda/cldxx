@@ -175,7 +175,7 @@ export default function Sidebar() {
   useEffect(() => {
     // Same shape as the conversation fetch above: load once the user is known.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (import.meta.env.VITE_SOVEREIGN_ONLY !== "true" && userData?._id) refreshMcpCount();
+    if (userData?._id) refreshMcpCount();
   }, [userData?._id, refreshMcpCount]);
 
   useEffect(() => {
@@ -336,7 +336,7 @@ export default function Sidebar() {
           <Search size={16} />
         </button>
 
-        {!isLocalSovereign && <><button
+        <button
           onClick={() => setShowMcp(true)}
           title="MCP servers"
           className="relative flex items-center justify-center w-9 h-9 rounded-xl text-slate-500 hover:text-slate-200 hover:bg-white/[0.05] transition-colors duration-150 bg-transparent border-none cursor-pointer"
@@ -347,13 +347,13 @@ export default function Sidebar() {
           )}
         </button>
 
-        <button
+        {!isLocalSovereign && <button
           onClick={() => setShowKeys(true)}
           title="Your API keys"
           className="flex items-center justify-center w-9 h-9 rounded-xl text-slate-500 hover:text-slate-200 hover:bg-white/[0.05] transition-colors duration-150 bg-transparent border-none cursor-pointer"
         >
           <KeyRound size={16} />
-        </button></>}
+        </button>}
 
         <button
           onClick={toggleIncognito}
@@ -526,7 +526,7 @@ export default function Sidebar() {
               </span>
             </button>
 
-            {!isLocalSovereign && <><button onClick={() => { setShowMcp(true); setMobileOpen(false); }} className={navRow(false)}>
+            <button onClick={() => { setShowMcp(true); setMobileOpen(false); }} className={navRow(false)}>
               <Plug size={15} className="shrink-0 text-slate-400" />
               <span className="flex-1">MCP Servers</span>
               {mcpEnabled > 0 && (
@@ -536,10 +536,10 @@ export default function Sidebar() {
               )}
             </button>
 
-            <button onClick={() => { setShowKeys(true); setMobileOpen(false); }} className={navRow(false)}>
+            {!isLocalSovereign && <button onClick={() => { setShowKeys(true); setMobileOpen(false); }} className={navRow(false)}>
               <KeyRound size={15} className="shrink-0 text-slate-400" />
               <span className="flex-1">API Keys</span>
-            </button></>}
+            </button>}
 
             {/* Agents group — the composer's roster, mirrored as a nav tree */}
             <button onClick={() => setAgentsOpen(o => !o)} className={navRow(false)}>
@@ -777,10 +777,10 @@ export default function Sidebar() {
       {import.meta.env.VITE_BILLING_ENABLED !== "false" &&
         <BillingDrawer open={showBilling} onClose={() => setShowBilling(false)} />}
 
-      {!isLocalSovereign && <><ApiKeysDrawer
+      {!isLocalSovereign && <ApiKeysDrawer
         open={showKeys}
         onClose={() => setShowKeys(false)}
-      />
+      />}
 
       <McpDrawer
         open={showMcp}
@@ -788,11 +788,11 @@ export default function Sidebar() {
         onClose={() => { setShowMcp(false); refreshMcpCount(); }}
       />
 
-      <ShareDialog
+      {!isLocalSovereign && <ShareDialog
         open={Boolean(sharing)}
         conversation={sharing}
         onClose={() => setSharing(null)}
-      /></>}
+      />}
     </>
   );
 }

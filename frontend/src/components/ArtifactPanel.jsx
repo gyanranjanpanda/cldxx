@@ -25,13 +25,13 @@ export default function ArtifactPanel() {
   const files    = artifact?.files ?? NO_FILES;
   const htmlFile = files.find(f => /\.html$/i.test(f.name) && /index/i.test(f.name))
                 ?? files.find(f => /\.html$/i.test(f.name));
-  const canPreview = import.meta.env.VITE_SOVEREIGN_ONLY !== "true" && Boolean(htmlFile);
+  const canPreview = Boolean(htmlFile);
 
   // Every hook has to run before the early return below. Putting this after it
   // changes the hook count the moment an artifact arrives, which unmounts the
   // whole app rather than just this panel.
   const previewDoc = useMemo(
-    () => canPreview ? buildPreviewDoc(files, htmlFile) : "",
+    () => canPreview ? buildPreviewDoc(files, htmlFile, { offline: import.meta.env.VITE_SOVEREIGN_ONLY === "true" }) : "",
     [canPreview, files, htmlFile]
   );
 

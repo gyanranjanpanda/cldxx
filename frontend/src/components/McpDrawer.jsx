@@ -15,9 +15,11 @@ const TRANSPORTS = [
   { id: "stdio", label: "Local process", icon: Terminal, hint: "A command the agent host spawns and talks to over stdio" }
 ];
 
+const localOnly = import.meta.env.VITE_SOVEREIGN_ONLY === "true";
+
 const blankDraft = () => ({
   name: "",
-  transport: "http",
+  transport: localOnly ? "stdio" : "http",
   url: "",
   command: "",
   args: "",
@@ -233,7 +235,7 @@ export default function McpDrawer({ open, onClose, oauthNotice }) {
     try {
       const [data, providerList] = await Promise.all([
         getMcpServers(),
-        getMcpProviders()
+        localOnly ? [] : getMcpProviders()
       ]);
       setServers(data.servers || []);
       setStdioAllowed(Boolean(data.stdioAllowed));
@@ -348,7 +350,7 @@ export default function McpDrawer({ open, onClose, oauthNotice }) {
 
   const isRemote   = draft?.transport !== "stdio";
   const enabledCount = servers.filter(s => s.enabled).length;
-  const transports = TRANSPORTS.filter(t => t.id !== "stdio" || stdioAllowed);
+  const transports = TRANSPORTS.filter(t => t.id === "stdio" ? stdioAllowed : !localOnly);
 
   return (
     <AnimatePresence>
@@ -377,7 +379,7 @@ export default function McpDrawer({ open, onClose, oauthNotice }) {
                   {draft ? (draft._id ? "Edit server" : "Add MCP server") : "MCP Servers"}
                 </h2>
                 <p className="text-[12.5px] text-slate-500 mt-0.5">
-                  {draft
+                  {localOnly ? "Run a trusted local MCP process inside your Sovereign agent." : draft
                     ? "Connect a local process or a remote endpoint."
                     : "Connect MCP servers to extend cldxAI with external tools."}
                 </p>
@@ -480,7 +482,7 @@ export default function McpDrawer({ open, onClose, oauthNotice }) {
                         <input
                           value={draft.command}
                           onChange={(e) => setDraft({ ...draft, command: e.target.value })}
-                          placeholder="npx"
+                          placeholder={localOnly ? "node" : "npx"}
                           className="w-full px-3 h-[38px] rounded-lg bg-white/[0.04] border border-white/[0.08] outline-none text-[13px] text-slate-200 placeholder:text-slate-600 focus:border-blue-500/40"
                         />
                       </div>
@@ -561,6 +563,7 @@ export default function McpDrawer({ open, onClose, oauthNotice }) {
 
                     <button
                       onClick={() => setDraft(blankDraft())}
+                      disabled={localOnly && !stdioAllowed}
                       className="flex items-center gap-1.5 text-[12.5px] font-medium text-white bg-blue-600 hover:bg-blue-500 px-3 h-[34px] rounded-lg border-none cursor-pointer transition-colors duration-150"
                     >
                       <Plus size={13} />
@@ -580,6 +583,7 @@ export default function McpDrawer({ open, onClose, oauthNotice }) {
                       <p className="text-[12.5px] text-slate-600">Add your own MCP servers with custom tools</p>
                       <button
                         onClick={() => setDraft(blankDraft())}
+                        disabled={localOnly && !stdioAllowed}
                         className="flex items-center gap-1.5 mt-2 text-[13px] font-medium text-white bg-blue-600 hover:bg-blue-500 px-4 h-[36px] rounded-lg border-none cursor-pointer transition-colors duration-150"
                       >
                         <Plus size={14} />
@@ -608,7 +612,9 @@ export default function McpDrawer({ open, onClose, oauthNotice }) {
                       <li>• Only connect to servers you trust — their tools run with your agent's access.</li>
                       <li>• Enable a server to make its tools available in chat.</li>
                       <li>• Use Health Check to confirm connectivity and see what tools it exposes.</li>
-                      <li>• Add HTTP headers for authentication when a remote server needs a token.</li>
+                      {localOnly
+                        ? <li>• Commands and files must be available inside the agent container.</li>
+                        : <li>• Add HTTP headers for authentication when a remote server needs a token.</li>}
                     </ul>
                   </div>
 

@@ -391,17 +391,6 @@ export const runWithMcpTools = async ({ llm, messages, userId, state = {} }) => 
     state.mcpRequested === true || /\bmcp\b/i.test(prompt);
 
   try {
-    if (process.env.SOVEREIGN_ONLY === "true") {
-      if (explicitMcpRequest) {
-        const message = "MCP integrations are unavailable in this local Sovereign installation.";
-        return { response: message, toolCalls: [], mcpErrors: [{ server: "mcp", error: message }] };
-      }
-      const reply = state.trace
-        ? await traceSpan(state.trace, "MODEL_INVOKE_DIRECT", () => llm.invoke(messages))
-        : await llm.invoke(messages);
-      return { response: readReply(reply), toolCalls: [], mcpErrors: [] };
-    }
-
     const { servers: available, stdioAllowed } = state.trace
       ? await traceSpan(state.trace, "MCP_FETCH_SERVERS", () => fetchServers(userId))
       : await fetchServers(userId);

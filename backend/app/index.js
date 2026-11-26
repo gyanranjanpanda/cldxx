@@ -79,8 +79,8 @@ app.use("/api/chat", protect, injectUser, withSovereignPolicy, json, chatRouter)
 if (process.env.BILLING_ENABLED !== "false") {
   app.use("/api/billing", protect, injectUser, json, billingRouter);
 }
+app.use("/api/mcp", protect, injectUser, json, mcpRouter);
 if (process.env.SOVEREIGN_ONLY !== "true") {
-  app.use("/api/mcp", protect, injectUser, json, mcpRouter);
   app.use("/api/keys", protect, injectUser, json, keysRouter);
   app.use("/api/invites", protect, injectUser, json, inviteRouter);
 

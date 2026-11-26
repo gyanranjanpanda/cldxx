@@ -17,8 +17,12 @@ router.post("/servers", createServer);
 router.put("/servers/:id", updateServer);
 router.patch("/servers/:id/toggle", toggleServer);
 router.delete("/servers/:id", deleteServer);
-router.get("/providers", listMcpProviders);
-router.get("/oauth/:provider/start", startMcpOAuth);
-router.get("/oauth/:provider/callback", mcpOAuthCallback);
+const cloudMcpOnly = (_req, res, next) => {
+  if (process.env.SOVEREIGN_ONLY === "true") return res.sendStatus(404);
+  next();
+};
+router.get("/providers", cloudMcpOnly, listMcpProviders);
+router.get("/oauth/:provider/start", cloudMcpOnly, startMcpOAuth);
+router.get("/oauth/:provider/callback", cloudMcpOnly, mcpOAuthCallback);
 
 export default router;

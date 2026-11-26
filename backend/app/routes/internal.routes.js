@@ -35,8 +35,8 @@ const cloudOnly = (handler) => (req, res, next) => {
   if (process.env.SOVEREIGN_ONLY === "true") return res.sendStatus(404);
   return handler(req, res, next);
 };
-router.get("/mcp-servers/:userId", cloudOnly(getServersForAgent));
-router.post("/mcp-status", cloudOnly(saveServerStatus));
+router.get("/mcp-servers/:userId", getServersForAgent);
+router.post("/mcp-status", saveServerStatus);
 router.get("/user-keys/:userId", cloudOnly(getKeysForAgent));
 
 export default router;

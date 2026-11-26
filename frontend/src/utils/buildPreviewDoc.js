@@ -94,7 +94,15 @@ const PREVIEW_GUARD = `<script>
 }());
 </script>`;
 
-export function buildPreviewDoc(files = [], htmlFile = null) {
+const OFFLINE_POLICY = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; form-action 'none'; base-uri 'none'; webrtc 'block'">
+<meta http-equiv="x-dns-prefetch-control" content="off">
+<script>
+  for (const name of ["RTCPeerConnection", "webkitRTCPeerConnection"]) {
+    Object.defineProperty(window, name, { value: undefined, configurable: false, writable: false });
+  }
+</script>`;
+
+export function buildPreviewDoc(files = [], htmlFile = null, { offline = false } = {}) {
   if (!htmlFile) return "";
 
   const used = new Set([htmlFile.name]);
@@ -145,6 +153,7 @@ export function buildPreviewDoc(files = [], htmlFile = null) {
     return `<!DOCTYPE html>
 <html>
 <head>
+${offline ? OFFLINE_POLICY : ""}
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 ${PREVIEW_GUARD}
@@ -162,6 +171,11 @@ ${scriptBlock}
   html = /<head[^>]*>/i.test(html)
     ? html.replace(/<head[^>]*>/i, (tag) => `${tag}\n${PREVIEW_GUARD}`)
     : `${PREVIEW_GUARD}\n${html}`;
+
+  if (offline) {
+    // Install the policy before generated markup, retaining standards mode.
+    html = html.replace(/^(\s*<!doctype html[^>]*>)?/i, (_match, doctype = "") => `${doctype}${OFFLINE_POLICY}\n`);
+  }
 
   if (styleBlock) {
     html = /<\/head>/i.test(html)

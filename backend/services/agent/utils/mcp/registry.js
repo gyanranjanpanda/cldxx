@@ -52,8 +52,10 @@ export const fetchServers = async (userId, { enabledOnly = true, id } = {}) => {
 
   }
 
+  const servers = data?.servers || [];
   return {
-    servers: data?.servers || [],
+    servers: process.env.SOVEREIGN_ONLY === "true"
+      ? servers.filter(({ transport }) => transport === "stdio") : servers,
     stdioAllowed: Boolean(data?.stdioAllowed)
   };
 
@@ -92,7 +94,7 @@ export class McpSession {
 
     if (server.transport === "stdio") return this.stdioAllowed;
 
-    return Boolean(server.url);
+    return process.env.SOVEREIGN_ONLY !== "true" && Boolean(server.url);
 
   }
 

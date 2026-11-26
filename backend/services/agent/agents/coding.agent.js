@@ -23,13 +23,6 @@ const runsInPreview = (f) =>
   PREVIEWABLE.test(f.name) && !NODE_MARKERS.test(f.content || "");
 
 const buildSummary = (title, files) => {
-  if (process.env.SOVEREIGN_ONLY === "true") {
-    return [
-      `# ${title}`, "", `Generated ${files.length} files.`, "",
-      ...files.map(({ name }) => `- \`${name}\``), "",
-      "Open the **Code** panel to read or copy the files."
-    ].join("\n");
-  }
   const frontend = files.filter(runsInPreview);
   const backend = files.filter((f) => !runsInPreview(f));
 

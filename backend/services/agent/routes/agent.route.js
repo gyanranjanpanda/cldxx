@@ -13,7 +13,7 @@ express.Router();
 // Identity arrives as a header, so every route here has to prove it came
 // through the app rather than straight off the network.
 router.use(requireGateway);
-router.use(["/image", "/mcp"], (_req, res, next) => {
+router.use("/image", (_req, res, next) => {
  if (process.env.SOVEREIGN_ONLY === "true") return res.sendStatus(404);
  next();
 });

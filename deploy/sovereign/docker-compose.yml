@@ -91,6 +91,7 @@ services:
       SOVEREIGN_MONGODB_URL: "mongodb://mongo:27017/cldx_sovereign"
       LOCAL_AUTH_ENABLED: "true"
       SOVEREIGN_ONLY: "true"
+      MCP_ALLOW_STDIO: "${MCP_ALLOW_STDIO:-true}"
       BILLING_ENABLED: "false"
       LOCAL_AUTH_USERNAME: "${LOCAL_AUTH_USERNAME:?set LOCAL_AUTH_USERNAME in .env}"
       LOCAL_AUTH_PASSWORD_HASH: "${LOCAL_AUTH_PASSWORD_HASH:?set LOCAL_AUTH_PASSWORD_HASH in .env}"

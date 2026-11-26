@@ -84,7 +84,8 @@ if(!state.file && isClockQuestion(state.prompt)){
 // server to create X" as a coding request, which answered with a generated
 // project instead of calling the tool. Tools are bound on the chat agent, so
 // that is where this has to land.
-if(!state.sovereign && !state.file && await wantsMcpTools(state.userId, state.prompt)){
+if((!state.sovereign || process.env.SOVEREIGN_ONLY === "true") &&
+   !state.file && await wantsMcpTools(state.userId, state.prompt)){
 
     return{
 

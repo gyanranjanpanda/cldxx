@@ -47,7 +47,9 @@ cd cldxx/deploy/sovereign
 
 To choose a larger default model, set `SOVEREIGN_MODEL` in your local `.env`. Set `SOVEREIGN_CODING_MODEL` for a dedicated coding model or `SOVEREIGN_VISION_MODEL` for local image attachments. Rerun the installer to download models that are missing. Existing installations keep their configured models. To stop without deleting data, run `docker compose down` from this directory. To update, run `git pull` and rerun the installer.
 
-The local app supports chat, coding, document tools, and chat history import and search. API keys, web and GitHub fetches, MCP integrations, cloud image generation, voice transcription, share links, and generated-code execution in the browser are disabled. External citations are displayed as text. Generated files can be read and copied from **Code**.
+The local app supports chat, coding, document tools, and chat history import and search. API keys, web and GitHub fetches, cloud image generation, voice transcription, and share links are disabled. External citations are displayed as text. **Code** lets you read and copy generated files. **Preview** runs self-contained HTML, CSS and JavaScript in a sandbox with network access blocked.
+
+**MCP Servers** supports local stdio servers. Use a trusted command and files available inside the agent container. For a server you already have on your laptop, mount its folder read-only using a Compose override and point the command at the mounted path. For example, mount `./mcp-tools:/opt/mcp-tools:ro` on the `agent` service, then use command `node` with argument `/opt/mcp-tools/server.mjs`. Include any dependencies required by that server. Use **Health Check** to confirm the tools are available. Remote HTTP, SSE and OAuth connections are disabled. Set `MCP_ALLOW_STDIO=false` in `.env` and recreate the app container to disable local process execution.
 
 This local profile supports local chat, coding, embeddings, and image *inputs*. It does not provide image generation; the hosted ComfyUI ngrok endpoint cannot be reached from the isolated application network.
 
