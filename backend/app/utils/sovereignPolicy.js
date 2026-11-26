@@ -22,6 +22,7 @@ const cacheKey = (userId) => `sov-policy:v1:${userId}`;
 export const getSovereignPolicy = async (userId) => {
 
   if (!userId) throw new Error("Authenticated user id is required for sovereign policy lookup");
+  if (process.env.SOVEREIGN_ONLY === "true") return "sovereign_only";
 
   try {
 

@@ -153,7 +153,8 @@ export const localModelFor =
 export const CLOUD_ONLY_AGENTS =
  new Set([
   "image",
-  "search"
+  "search",
+  "github"
  ]);
 
 // ── What the configured local model can actually do ────────────────────────

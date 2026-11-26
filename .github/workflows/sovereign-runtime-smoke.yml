@@ -58,11 +58,26 @@ jobs:
             sleep 2
           done
           python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["user"]["sovereignPolicy"] == "sovereign_only"; print("local login passed")' "$response"
+          for route in keys mcp/servers invites shared/example transfer/export agent/image/status/example; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' -b "$cookie" "http://127.0.0.1:8080/api/$route")
+            test "$code" = 404
+          done
+          for route in auth/login speech/transcribe agent/image/generate agent/mcp/health; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' -b "$cookie" -H 'content-type: application/json' -d '{}' "http://127.0.0.1:8080/api/$route")
+            test "$code" = 404
+          done
           conversation=$(curl -fsS http://127.0.0.1:8080/api/chat/create-conversation \
             -H 'content-type: application/json' -b "$cookie" -d '{"sovereign":true}' \
             | python3 -c 'import json,sys; print(json.load(sys.stdin)["_id"])')
+          for agent in search image github; do
+            code=$(curl -sS -o "$response" -w '%{http_code}' -b "$cookie" \
+              -F "conversationId=$conversation" -F 'prompt=policy check' -F "agent=$agent" -F 'sovereign=false' \
+              http://127.0.0.1:8080/api/agent/chat)
+            test "$code" = 403
+            python3 -c 'import json,sys; assert json.load(open(sys.argv[1]))["rule"] == "SOV-002"' "$response"
+          done
           curl -fsS --max-time 180 http://127.0.0.1:8080/api/agent/chat \
-            -b "$cookie" -F "conversationId=$conversation" -F 'sovereign=true' \
+            -b "$cookie" -F "conversationId=$conversation" -F 'sovereign=false' \
             -F 'incognito=false' -F 'prompt=Say hello in one short sentence.' \
             -F 'agent=chat' -F 'timezone=UTC' -o "$response"
           python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["zone"] == "SOVEREIGN" and d["answer"].strip(); print("local chat passed:", d["answer"][:120])' "$response"

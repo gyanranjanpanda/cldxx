@@ -1,7 +1,9 @@
 import {BrowserRouter, Route, Routes} from "react-router-dom"
 import Home from './pages/Home'
-import SharedConversation from './pages/SharedConversation'
+import { lazy, Suspense } from "react";
 import useCurrentUser from './hooks/useCurrentUser'
+const SharedConversation = import.meta.env.VITE_SOVEREIGN_ONLY === "true"
+  ? null : lazy(() => import("./pages/SharedConversation"));
 function App() {
   useCurrentUser()
  
@@ -11,7 +13,7 @@ function App() {
     <Route path='/' element={<Home/>}/>
     {/* Guests have no session, so this route must sit outside anything that
         expects one -- Home redirects to Login when there is no user. */}
-    <Route path='/shared/:token' element={<SharedConversation/>}/>
+    {SharedConversation && <Route path='/shared/:token' element={<Suspense><SharedConversation /></Suspense>} />}
    </Routes>
    
    </BrowserRouter>

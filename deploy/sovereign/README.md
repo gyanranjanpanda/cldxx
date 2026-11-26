@@ -14,7 +14,7 @@ For ChatGPT, request an export in **Settings → Data controls**. For Claude, us
 
 Use the search icon in the local sidebar to find imported and private chats by title, message text, or inline artifact name. Search runs entirely on the local installation. To search the contents of a saved PDF, open the file or attach it to a new Sovereign chat and ask about it.
 
-Requirements: a running Docker Desktop (macOS/Windows) or Docker Engine with Compose v2 (Linux), enough free disk for models and containers, and preferably at least 8 GB of memory available to Docker. The installer selects smaller 1.5B chat and coding models plus a compact vision model; responses will be less capable than larger models. CPU-only inference may be slow. Mobile devices and machines that cannot run Docker are not supported.
+Requirements: a running Docker Desktop (macOS/Windows) or Docker Engine with Compose v2 (Linux), enough free disk for models and containers, and preferably at least 8 GB of memory available to Docker. The default install downloads one compact chat and coding model and one embedding model for document search. CPU-only inference may be slow. Mobile devices and machines that cannot run Docker are not supported.
 
 The repository is public. Each user can either use Git as shown below or download the [source ZIP](https://github.com/gyanranjanpanda/cldxx/archive/refs/heads/master.zip), extract it, and run the installer from `cldxx-master/deploy/sovereign`. With a ZIP download, use `bash install.sh` on macOS/Linux or `.\install.ps1` on Windows.
 
@@ -45,7 +45,9 @@ cd cldxx/deploy/sovereign
 ./reset-password.sh
 ```
 
-To use larger models, edit `SOVEREIGN_MODEL`, `SOVEREIGN_CODING_MODEL`, and `SOVEREIGN_VISION_MODEL` in your local `.env`, then rerun the installer to download them. To stop without deleting data, run `docker compose down` from this directory. To update, run `git pull` and rerun the installer.
+To choose a larger default model, set `SOVEREIGN_MODEL` in your local `.env`. Set `SOVEREIGN_CODING_MODEL` for a dedicated coding model or `SOVEREIGN_VISION_MODEL` for local image attachments. Rerun the installer to download models that are missing. Existing installations keep their configured models. To stop without deleting data, run `docker compose down` from this directory. To update, run `git pull` and rerun the installer.
+
+The local app supports chat, coding, document tools, and chat history import and search. API keys, web and GitHub fetches, MCP integrations, cloud image generation, voice transcription, share links, and generated-code execution in the browser are disabled. External citations are displayed as text. Generated files can be read and copied from **Code**.
 
 This local profile supports local chat, coding, embeddings, and image *inputs*. It does not provide image generation; the hosted ComfyUI ngrok endpoint cannot be reached from the isolated application network.
 
@@ -73,9 +75,7 @@ docker compose pull mongo redis qdrant ollama
 docker volume create cldx-sovereign_ollama-models
 docker run -d --name cldx-model-loader --network bridge \
   -v cldx-sovereign_ollama-models:/root/.ollama ollama/ollama:latest serve
-docker exec cldx-model-loader ollama pull llama3.1
-docker exec cldx-model-loader ollama pull qwen2.5-coder
-docker exec cldx-model-loader ollama pull llama3.2-vision
+docker exec cldx-model-loader ollama pull qwen2.5:1.5b
 docker exec cldx-model-loader ollama pull nomic-embed-text
 docker rm -f cldx-model-loader
 docker compose up -d
@@ -95,4 +95,4 @@ docker compose up --no-build --pull never -d
 ./verify-containment.sh
 ```
 
-The offline host must not attempt `ollama pull` or `docker compose build`. Test sign-in, a chat turn, a PDF or image input, and restoration from backup before calling the installation ready. Cloud search, cloud image generation, speech transcription, billing, and remote MCP integrations require external services and are unavailable in this profile.
+The offline host must not attempt `ollama pull` or `docker compose build`. Test sign-in, a chat turn, PDF input, and restoration from backup before calling the installation ready. Test image input if you enabled a local vision model.

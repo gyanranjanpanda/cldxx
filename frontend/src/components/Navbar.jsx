@@ -62,7 +62,7 @@ export default function Navbar() {
 
         {/* Only a stored conversation can be shared: incognito has no row to
             point a link at, and an unsaved chat has nothing to show a guest. */}
-        {selectedConversation && !incognito && (
+        {import.meta.env.VITE_SOVEREIGN_ONLY !== "true" && selectedConversation && !incognito && (
           <button
             onClick={() => setShowShare(true)}
             title="Share this chat"
@@ -74,11 +74,11 @@ export default function Navbar() {
         )}
       </div>
 
-      <ShareDialog
+      {import.meta.env.VITE_SOVEREIGN_ONLY !== "true" && <ShareDialog
         open={showShare}
         onClose={() => setShowShare(false)}
         conversation={selectedConversation}
-      />
+      />}
 
     </div>
   );

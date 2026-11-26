@@ -1,6 +1,7 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GithubAuthProvider, GoogleAuthProvider } from "firebase/auth";
+export { getRedirectResult, signInWithRedirect } from "firebase/auth";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {

@@ -2,7 +2,7 @@ import redis from "../../../shared/redis/redis.js";
 import { graph } from "../graph/supervisor.graph.js";
 import { addMessage, isEphemeral } from "../utils/memory.js";
 import { internalApi } from "../utils/internalApi.js";
-import { resolveSovereign, assertRedisLocal } from "../utils/sovereign.js";
+import { resolveSovereign, assertRedisLocal, assertAgentAllowed, PolicyDenied } from "../utils/sovereign.js";
 import { audit } from "../utils/audit.js";
 import { fetchUserKeys } from "../utils/userKeys.js";
 import { createTrace, traceSpan, recordBreakpoint, endTrace } from "../utils/diagnostics/tracer.js";
@@ -10,6 +10,7 @@ import fs from "fs/promises";
 import { storeArtifact } from "../utils/storage.js";
 
 export const chat = async (req, res, next) => {
+  const localOnly = process.env.SOVEREIGN_ONLY === "true";
   let trace = null;
   try {
     const {
@@ -34,10 +35,16 @@ export const chat = async (req, res, next) => {
     // cannot, and it outranks the request. A user may ask for Sovereign Mode; only
     // an administrator may require it.
     const zone = resolveSovereign(
-      req.headers["x-sovereign-policy"],
+      localOnly ? "sovereign_only" : req.headers["x-sovereign-policy"],
       sovereign
     );
     const isSovereignTurn = zone.sovereign;
+    if (localOnly) {
+      assertAgentAllowed(agent, true);
+      if (!process.env.SOVEREIGN_VISION_MODEL && (agent === "vision" || req.file?.mimetype.startsWith("image/"))) {
+        throw new PolicyDenied("Image attachments require an optional local vision model.", "SOV-006");
+      }
+    }
 
     // Initialize diagnostic trace immediately on ingress
     trace = createTrace({
@@ -156,6 +163,9 @@ export const chat = async (req, res, next) => {
 
     return res.json(responsePayload);
   } catch (error) {
+    if (localOnly && error.isPolicyDenial && req.file) {
+      await fs.rm(req.file.path, { force: true }).catch(() => {});
+    }
     if (trace) {
       recordBreakpoint(trace, "CONTROLLER_EXCEPTION", error, {
         conversationId: req.body?.conversationId,

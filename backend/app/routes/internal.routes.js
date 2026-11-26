@@ -31,11 +31,12 @@ router.get("/get-messages/:id", getMessages);
 
 // The agent needs decrypted MCP credentials to open a connection; that is the
 // whole reason this surface is key-gated and sessionless.
-router.get("/mcp-servers/:userId", getServersForAgent);
-router.post("/mcp-status", saveServerStatus);
-
-// Same reasoning for a user's own provider keys: the agent is the process that
-// builds the model client, so it is the only thing that needs them decrypted.
-router.get("/user-keys/:userId", getKeysForAgent);
+const cloudOnly = (handler) => (req, res, next) => {
+  if (process.env.SOVEREIGN_ONLY === "true") return res.sendStatus(404);
+  return handler(req, res, next);
+};
+router.get("/mcp-servers/:userId", cloudOnly(getServersForAgent));
+router.post("/mcp-status", cloudOnly(saveServerStatus));
+router.get("/user-keys/:userId", cloudOnly(getKeysForAgent));
 
 export default router;

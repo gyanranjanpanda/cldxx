@@ -7,6 +7,16 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Copy, Check } from "lucide-react";
 
+const localOnly = import.meta.env.VITE_SOVEREIGN_ONLY === "true";
+const sameOrigin = (url) => {
+  if (!url) return false;
+  try {
+    return new URL(url, window.location.origin).origin === window.location.origin;
+  } catch {
+    return false;
+  }
+};
+
 function MessageBubble({ role, content ,images}) {
   const isUser = role === "user";
   const [lightboxSrc, setLightboxSrc] = useState(null);
@@ -14,6 +24,7 @@ function MessageBubble({ role, content ,images}) {
 
   const resolveImageUrl = (url) => {
     if (!url) return "";
+    if (localOnly && !url.startsWith("data:")) return sameOrigin(url) ? new URL(url, window.location.origin).href : "";
     if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) {
       return url;
     }
@@ -88,6 +99,7 @@ const markdown = (content || "")
     <div className="flex flex-wrap gap-3 mt-4">
         {images.map((img, i) => {
           const resolvedSrc = resolveImageUrl(img);
+          if (!resolvedSrc) return null;
           return (
             <img
               key={i}
@@ -157,9 +169,14 @@ const markdown = (content || "")
       </td>
     ),
 
-    a: ({ href, children }) => (
+    a: ({ href, children }) => {
+      const url = resolveDownloadUrl(href);
+      if (localOnly && !sameOrigin(url)) {
+        return <span title={href}>{children}{href && String(children) !== href ? ` (${href})` : ""}</span>;
+      }
+      return (
       <a
-        href={resolveDownloadUrl(href)}
+        href={url}
         target="_blank"
         rel="noreferrer"
         className="text-blue-400 underline inline-flex items-center gap-1"
@@ -167,11 +184,13 @@ const markdown = (content || "")
         {children}
         <FiExternalLink size={11} />
       </a>
-    ),
+      );
+    },
 
     img: ({ src }) => {
       if (!src) return null;
       const resolvedSrc = resolveImageUrl(src);
+      if (!resolvedSrc) return null;
 
       return (
         <img
@@ -189,7 +208,6 @@ const markdown = (content || "")
     },
 
     code({ className, children }) {
-      console.log(children)
       const value = String(children)
   .replace(/^\s*```[^\n]*\n/, "")
   .replace(/\n```\s*$/, "")

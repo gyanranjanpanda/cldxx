@@ -11,7 +11,7 @@ import { deleteConversation, getConversations, renameConversation, searchSavedCh
 import { removeConversation, setConversations, setConvTitle, setIncognito, setSelectedAgent, setSelectedConversation } from "../redux/conversation.slice";
 import { getMessages } from "../features/message.api";
 import { setArtifacts, setMessages } from "../redux/message.slice";
-import { AGENTS } from "../constants/agents";
+import { agentsForMode } from "../constants/agents";
 import BillingDrawer from "./BillingDrawer";
 import McpDrawer from "./McpDrawer";
 import ApiKeysDrawer from "./ApiKeysDrawer";
@@ -76,7 +76,7 @@ export default function Sidebar() {
   const [mobileOpen, setMobileOpen]     = useState(false);
   const [imageError, setImageError]     = useState(false);
   const [showBilling, setShowBilling]   = useState(false);
-  const initialMcpNotice = useMemo(() => mcpReturnNotice(), []);
+  const initialMcpNotice = useMemo(() => import.meta.env.VITE_SOVEREIGN_ONLY !== "true" && mcpReturnNotice(), []);
   const [showMcp, setShowMcp]           = useState(Boolean(initialMcpNotice));
   const mcpNotice = initialMcpNotice;
   const [showKeys, setShowKeys]         = useState(false);
@@ -96,7 +96,7 @@ export default function Sidebar() {
   const { userData } = useSelector(state => state.user);
   const { conversations, selectedConversation, selectedAgent, incognito, sovereign } = useSelector(state => state.conversation);
   const dispatch = useDispatch();
-  const availableAgents = sovereign ? AGENTS.filter(a => a.id !== "search") : AGENTS;
+  const availableAgents = agentsForMode(sovereign);
 
   const logout = async () => {
     try {
@@ -175,7 +175,7 @@ export default function Sidebar() {
   useEffect(() => {
     // Same shape as the conversation fetch above: load once the user is known.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (userData?._id) refreshMcpCount();
+    if (import.meta.env.VITE_SOVEREIGN_ONLY !== "true" && userData?._id) refreshMcpCount();
   }, [userData?._id, refreshMcpCount]);
 
   useEffect(() => {
@@ -336,7 +336,7 @@ export default function Sidebar() {
           <Search size={16} />
         </button>
 
-        <button
+        {!isLocalSovereign && <><button
           onClick={() => setShowMcp(true)}
           title="MCP servers"
           className="relative flex items-center justify-center w-9 h-9 rounded-xl text-slate-500 hover:text-slate-200 hover:bg-white/[0.05] transition-colors duration-150 bg-transparent border-none cursor-pointer"
@@ -353,7 +353,7 @@ export default function Sidebar() {
           className="flex items-center justify-center w-9 h-9 rounded-xl text-slate-500 hover:text-slate-200 hover:bg-white/[0.05] transition-colors duration-150 bg-transparent border-none cursor-pointer"
         >
           <KeyRound size={16} />
-        </button>
+        </button></>}
 
         <button
           onClick={toggleIncognito}
@@ -526,7 +526,7 @@ export default function Sidebar() {
               </span>
             </button>
 
-            <button onClick={() => { setShowMcp(true); setMobileOpen(false); }} className={navRow(false)}>
+            {!isLocalSovereign && <><button onClick={() => { setShowMcp(true); setMobileOpen(false); }} className={navRow(false)}>
               <Plug size={15} className="shrink-0 text-slate-400" />
               <span className="flex-1">MCP Servers</span>
               {mcpEnabled > 0 && (
@@ -539,7 +539,7 @@ export default function Sidebar() {
             <button onClick={() => { setShowKeys(true); setMobileOpen(false); }} className={navRow(false)}>
               <KeyRound size={15} className="shrink-0 text-slate-400" />
               <span className="flex-1">API Keys</span>
-            </button>
+            </button></>}
 
             {/* Agents group — the composer's roster, mirrored as a nav tree */}
             <button onClick={() => setAgentsOpen(o => !o)} className={navRow(false)}>
@@ -664,7 +664,7 @@ export default function Sidebar() {
                   <PenSquare size={12} />
                 </button>
               )}
-              {confirmingId !== chat._id && deletingId !== chat._id && (
+              {!isLocalSovereign && confirmingId !== chat._id && deletingId !== chat._id && (
                 <button
                   title="Share this chat"
                   onClick={(e) => { e.stopPropagation(); setSharing(chat); }}
@@ -777,7 +777,7 @@ export default function Sidebar() {
       {import.meta.env.VITE_BILLING_ENABLED !== "false" &&
         <BillingDrawer open={showBilling} onClose={() => setShowBilling(false)} />}
 
-      <ApiKeysDrawer
+      {!isLocalSovereign && <><ApiKeysDrawer
         open={showKeys}
         onClose={() => setShowKeys(false)}
       />
@@ -792,7 +792,7 @@ export default function Sidebar() {
         open={Boolean(sharing)}
         conversation={sharing}
         onClose={() => setSharing(null)}
-      />
+      /></>}
     </>
   );
 }

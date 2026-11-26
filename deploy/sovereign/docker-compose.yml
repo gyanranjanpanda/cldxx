@@ -90,6 +90,7 @@ services:
       INTERNAL_API_KEY: "${INTERNAL_API_KEY:?set INTERNAL_API_KEY in .env}"
       SOVEREIGN_MONGODB_URL: "mongodb://mongo:27017/cldx_sovereign"
       LOCAL_AUTH_ENABLED: "true"
+      SOVEREIGN_ONLY: "true"
       BILLING_ENABLED: "false"
       LOCAL_AUTH_USERNAME: "${LOCAL_AUTH_USERNAME:?set LOCAL_AUTH_USERNAME in .env}"
       LOCAL_AUTH_PASSWORD_HASH: "${LOCAL_AUTH_PASSWORD_HASH:?set LOCAL_AUTH_PASSWORD_HASH in .env}"
@@ -114,11 +115,12 @@ services:
       INTERNAL_API_KEY: "${INTERNAL_API_KEY:?set INTERNAL_API_KEY in .env}"
 
       # Sovereign Mode. One base URL serves chat, coding, vision and embeddings.
+      SOVEREIGN_ONLY: "true"
       SOVEREIGN_BASE_URL: "http://ollama:11434/v1"
       SOVEREIGN_API_KEY: "not-needed"
-      SOVEREIGN_MODEL: "${SOVEREIGN_MODEL:-llama3.1}"
-      SOVEREIGN_CODING_MODEL: "${SOVEREIGN_CODING_MODEL:-qwen2.5-coder}"
-      SOVEREIGN_VISION_MODEL: "${SOVEREIGN_VISION_MODEL:-llama3.2-vision}"
+      SOVEREIGN_MODEL: "${SOVEREIGN_MODEL:-qwen2.5:1.5b}"
+      SOVEREIGN_CODING_MODEL: "${SOVEREIGN_CODING_MODEL:-}"
+      SOVEREIGN_VISION_MODEL: "${SOVEREIGN_VISION_MODEL:-}"
       SOVEREIGN_EMBEDDING_MODEL: "${SOVEREIGN_EMBEDDING_MODEL:-nomic-embed-text}"
       SOVEREIGN_QDRANT_URL: "http://qdrant:6333"
       SOVEREIGN_ARTIFACT_DIR: "/app/services/agent/artifacts"
@@ -140,6 +142,7 @@ services:
         VITE_LOCAL_AUTH_ENABLED: "true"
         VITE_SOVEREIGN_ONLY: "true"
         VITE_SOVEREIGN_AVAILABLE: "true"
+        VITE_SOVEREIGN_VISION_MODEL: "${SOVEREIGN_VISION_MODEL:-}"
         VITE_BILLING_ENABLED: "false"
     networks: [internal, ingress]
     restart: unless-stopped

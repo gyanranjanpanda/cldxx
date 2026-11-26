@@ -23,3 +23,6 @@ export const AGENTS = [
 
 export const agentById = (id) =>
   AGENTS.find((a) => a.id === id) ?? AGENTS[0];
+
+const localAgents = AGENTS.filter(({ id }) => id !== "image" && id !== "search");
+export const agentsForMode = (sovereign) => sovereign ? localAgents : AGENTS;

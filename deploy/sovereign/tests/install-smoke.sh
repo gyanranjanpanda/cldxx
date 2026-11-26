@@ -13,6 +13,7 @@ python3 "$CLDX_MOCK_DOCKER" "$@"
 EOF
 chmod +x "$tmpdir/bin/docker"
 export CLDX_MOCK_DOCKER="$source_dir/tests/docker_mock.py"
+export CLDX_MOCK_MODEL_CACHE="$tmpdir/models"
 export PATH="$tmpdir/bin:$PATH"
 
 printf 'eight123\n' |
@@ -22,6 +23,8 @@ grep -q '^SOVEREIGN_MODEL=qwen2.5:1.5b$' "$env_file"
 grep -q '^FRONTEND_URL=http://127.0.0.1:8080$' "$env_file"
 grep -q '^INTERNAL_API_KEY=[a-f0-9]\{64\}$' "$env_file"
 grep -q 'Sovereign Mode is ready at http://127.0.0.1:8080' "$tmpdir/first.log"
+printf 'qwen2.5:1.5b\nnomic-embed-text\n' > "$tmpdir/expected-models"
+cmp "$tmpdir/expected-models" "$CLDX_MOCK_MODEL_CACHE"
 if grep -q 'eight123' "$tmpdir/first.log"; then
   echo 'Password leaked to installer output' >&2
   exit 1
@@ -31,4 +34,5 @@ cp "$env_file" "$tmpdir/original.env"
 bash "$tmpdir/deploy/sovereign/install.sh" < /dev/null > "$tmpdir/second.log" 2>&1
 cmp "$tmpdir/original.env" "$env_file"
 grep -q 'Using the existing .env' "$tmpdir/second.log"
+cmp "$tmpdir/expected-models" "$CLDX_MOCK_MODEL_CACHE"
 echo 'Unix installer fresh/resume smoke test passed'

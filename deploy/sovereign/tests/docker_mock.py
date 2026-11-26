@@ -1,5 +1,7 @@
 """Small Docker CLI stand-in for installer smoke tests; never starts containers."""
 
+import os
+from pathlib import Path
 import sys
 
 args = sys.argv[1:]
@@ -16,6 +18,13 @@ elif args[:1] == ["network"]:
     print("false" if "cldx-sovereign_ingress" in joined else "true")
 elif args[:1] == ["volume"]:
     print("mock-volume")
+elif args[:1] == ["exec"] and args[2:4] in (["ollama", "show"], ["ollama", "pull"]):
+    cache = Path(os.environ["CLDX_MOCK_MODEL_CACHE"])
+    models = cache.read_text().splitlines() if cache.exists() else []
+    if args[3] == "show":
+        sys.exit(0 if args[4] in models else 1)
+    with cache.open("a") as handle:
+        handle.write(args[4] + "\n")
 elif args[:1] == ["compose"]:
     if "exec" in args and "1.1.1.1" in joined:
         sys.exit(1)

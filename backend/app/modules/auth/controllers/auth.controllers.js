@@ -90,6 +90,7 @@ export const login = async (
   req,
   res
 ) => {
+  if (process.env.SOVEREIGN_ONLY === "true") return res.sendStatus(404);
 
   try {
 

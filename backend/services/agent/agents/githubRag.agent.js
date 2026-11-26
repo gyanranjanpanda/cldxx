@@ -10,6 +10,7 @@ import { createVectorStore } from "../utils/vectorStore.js";
 import { checkAgentLimit } from "../config/agentRateLimit.js";
 import { deductCredits } from "../utils/deductCredits.js";
 import { parseRepoUrl, fetchRepoMeta, fetchRepoFiles, LIMITS } from "../utils/github.js";
+import { assertAgentAllowed } from "../utils/sovereign.js";
 
 // Questions about layout and purpose are answered from the file tree and the
 // README, not from whichever chunks happen to sit nearest the wording.
@@ -102,6 +103,7 @@ const readmeExcerpt = (files, max = 4000) => {
 };
 
 export const githubRagAgent = async (state) => {
+  assertAgentAllowed("github", state.sovereign);
   await checkAgentLimit(state.userId, "github");
   await deductCredits(state.userId, "github");
 

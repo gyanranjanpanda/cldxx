@@ -48,9 +48,6 @@ if [[ ! -f "$env_file" ]]; then
     case "$line" in
       INTERNAL_API_KEY=*) printf 'INTERNAL_API_KEY=%s\n' "$internal_key" ;;
       LOCAL_AUTH_PASSWORD_HASH=*) printf 'LOCAL_AUTH_PASSWORD_HASH=%s\n' "$password_hash" ;;
-      SOVEREIGN_MODEL=*) printf 'SOVEREIGN_MODEL=qwen2.5:1.5b\n' ;;
-      SOVEREIGN_CODING_MODEL=*) printf 'SOVEREIGN_CODING_MODEL=qwen2.5-coder:1.5b\n' ;;
-      SOVEREIGN_VISION_MODEL=*) printf 'SOVEREIGN_VISION_MODEL=moondream:1.8b\n' ;;
       *) printf '%s\n' "$line" ;;
     esac
   done < .env.example > "$env_file"
@@ -76,15 +73,14 @@ vision_model="$(env_value SOVEREIGN_VISION_MODEL)"
 embedding_model="$(env_value SOVEREIGN_EMBEDDING_MODEL)"
 ollama_image="$(env_value OLLAMA_IMAGE)"
 web_port="$(env_value WEB_PORT)"
-[[ -n "$model" && -n "$coding_model" && -n "$vision_model" && -n "$embedding_model" ]] || {
-  echo "Model names are missing from .env." >&2; exit 1;
-}
+model="${model:-qwen2.5:1.5b}"
+embedding_model="${embedding_model:-nomic-embed-text}"
 ollama_image="${ollama_image:-ollama/ollama:latest}"
 web_port="${web_port:-8080}"
 
 docker compose --env-file "$env_file" config --quiet
 docker compose --env-file "$env_file" build
-docker compose --env-file "$env_file" pull mongo redis qdrant ollama
+docker compose --env-file "$env_file" pull --policy missing mongo redis qdrant ollama
 docker volume create cldx-sovereign_ollama-models >/dev/null
 
 # The application network is offline. Download models using a temporary
@@ -105,6 +101,11 @@ for _ in $(seq 1 30); do
 done
 [[ "$ready" == true ]] || { echo "Ollama did not start in the model loader." >&2; exit 1; }
 for selected_model in "$model" "$coding_model" "$vision_model" "$embedding_model"; do
+  [[ -n "$selected_model" ]] || continue
+  if docker exec "$loader" ollama show "$selected_model" >/dev/null 2>&1; then
+    echo "Using downloaded model $selected_model."
+    continue
+  fi
   echo "Downloading $selected_model to this computer..."
   docker exec "$loader" ollama pull "$selected_model"
 done

@@ -1,4 +1,5 @@
 import { createSlice } from '@reduxjs/toolkit'
+import { agentsForMode } from "../constants/agents";
 
 // crypto.randomUUID only exists in a secure context, so a plain-http LAN build
 // would throw here rather than open an incognito chat.
@@ -63,13 +64,14 @@ export const conversationSlice = createSlice({
   setSovereign: (state,action)=>{
 
    state.sovereign = import.meta.env.VITE_SOVEREIGN_ONLY === "true" || Boolean(action.payload);
-   if (state.sovereign && state.selectedAgent === "search") state.selectedAgent = "auto";
+   if (!agentsForMode(state.sovereign).some(({ id }) => id === state.selectedAgent)) state.selectedAgent = "auto";
 
   },
 
   setSelectedAgent: (state,action)=>{
 
-   state.selectedAgent = action.payload || "auto";
+   state.selectedAgent = agentsForMode(state.sovereign).some(({ id }) => id === action.payload)
+     ? action.payload : "auto";
 
   },
 

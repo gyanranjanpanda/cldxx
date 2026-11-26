@@ -84,7 +84,7 @@ if(!state.file && isClockQuestion(state.prompt)){
 // server to create X" as a coding request, which answered with a generated
 // project instead of calling the tool. Tools are bound on the chat agent, so
 // that is where this has to land.
-if(!state.file && await wantsMcpTools(state.userId, state.prompt)){
+if(!state.sovereign && !state.file && await wantsMcpTools(state.userId, state.prompt)){
 
     return{
 
@@ -100,7 +100,7 @@ if(!state.file && await wantsMcpTools(state.userId, state.prompt)){
 
 // A GitHub URL is unambiguous, so it is matched directly instead of paying for
 // a router LLM call and hoping the model picks the right label.
-if(parseRepoUrl(state.prompt)){
+if(!state.sovereign && parseRepoUrl(state.prompt)){
 
     return{
 
@@ -287,7 +287,7 @@ ${state.prompt}
  // file does X" then routes to coding and gets answered from the model's
  // imagination instead of the code. Only chat/coding are redirected, so asking
  // for an image or a PDF in the same conversation still works.
- if(picked === "chat" || picked === "coding"){
+ if(!state.sovereign && (picked === "chat" || picked === "coding")){
 
   const remembered =
   await redis.get(

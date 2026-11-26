@@ -9,7 +9,7 @@ import { Mic, MicOff, Loader2 } from "lucide-react";
 import { useEffect } from "react";
 import { createConversation, updateConversations } from "../features/conversation.api";
 import { addConversation, setConvTitle, setSelectedAgent, setSelectedConversation } from "../redux/conversation.slice";
-import { AGENTS } from "../constants/agents";
+import { agentsForMode } from "../constants/agents";
 import { useRef } from "react";
 
 // Mirrors what the agent's multer filter and utils/extractText.js accept.
@@ -21,6 +21,9 @@ const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 // at this size, while the smaller payload uploads and becomes Base64 much faster.
 const IMAGE_COMPRESSION_THRESHOLD = 4 * 1024 * 1024;
 const MAX_IMAGE_DIMENSION = 2048;
+const allowImageAttachments = import.meta.env.VITE_SOVEREIGN_ONLY !== "true" ||
+  Boolean(import.meta.env.VITE_SOVEREIGN_VISION_MODEL);
+const documentTypes = ".pdf,.docx,.txt,.md,.markdown,.csv,.tsv,.json,.log,.yml,.yaml,.xml,.html,.htm";
 
 const isAcceptedFile = (file) =>
   Boolean(file) &&
@@ -93,6 +96,11 @@ const dragDepth = useRef(0);
 const acceptFile = async (file) => {
   if (!file) return;
 
+  if (!allowImageAttachments && file.type.startsWith("image/")) {
+    setBanner({ open: true, title: "Image attachments unavailable", message: "Enable a local vision model to attach images." });
+    return;
+  }
+
   if (!isAcceptedFile(file)) {
     setBanner({
       open: true,
@@ -157,7 +165,7 @@ search:"Search the web..."
 
 };
 
-  const agents = sovereign ? AGENTS.filter(agent => agent.id !== "search") : AGENTS;
+  const agents = agentsForMode(sovereign);
 
 // ── Voice input ───────────────────────────────────────────────────────────
 // Recorded in the browser with MediaRecorder, transcribed server-side by
@@ -441,7 +449,6 @@ setSelectedFile(null);
 if (fileRef.current) fileRef.current.value = "";
 
       const data = await sendPrompt(formData);
-    console.log(data)
      dispatch(
   addMessage({
     role: "assistant",
@@ -449,8 +456,6 @@ if (fileRef.current) fileRef.current.value = "";
     images:data.images
   })
 );
-
-console.log(data)
 
 if(data.artifacts){
   dispatch(
@@ -707,7 +712,7 @@ type="file"
 
 hidden
 
-accept="image/*,.pdf,.docx,.txt,.md,.markdown,.csv,.tsv,.json,.log,.yml,.yaml,.xml,.html,.htm"
+accept={allowImageAttachments ? `image/*,${documentTypes}` : documentTypes}
 
 onChange={(e)=>{
 
@@ -723,7 +728,7 @@ handleFileChange(e);
             >
               <Paperclip size={14} />
             </button>
-           <button
+           {import.meta.env.VITE_SOVEREIGN_ONLY !== "true" && <button
 
 onClick={toggleMic}
 
@@ -805,7 +810,7 @@ isListening
 
 }
 
-</button>
+</button>}
           </div>
 
           {/* Right — send / stop */}

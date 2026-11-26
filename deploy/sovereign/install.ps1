@@ -64,9 +64,6 @@ if (-not (Test-Path $envFile)) {
     $template = [IO.File]::ReadAllText((Join-Path $PSScriptRoot '.env.example'))
     $template = $template.Replace('INTERNAL_API_KEY=change-me-to-a-long-random-string', "INTERNAL_API_KEY=$internalKey")
     $template = $template.Replace('LOCAL_AUTH_PASSWORD_HASH=replace-with-scrypt-hash', "LOCAL_AUTH_PASSWORD_HASH=$passwordHash")
-    $template = $template.Replace('SOVEREIGN_MODEL=llama3.1', 'SOVEREIGN_MODEL=qwen2.5:1.5b')
-    $template = $template.Replace('SOVEREIGN_CODING_MODEL=qwen2.5-coder', 'SOVEREIGN_CODING_MODEL=qwen2.5-coder:1.5b')
-    $template = $template.Replace('SOVEREIGN_VISION_MODEL=llama3.2-vision', 'SOVEREIGN_VISION_MODEL=moondream:1.8b')
     [IO.File]::WriteAllText($envFile, $template, [Text.UTF8Encoding]::new($false))
     $internalKey = $null
     $passwordHash = $null
@@ -75,13 +72,16 @@ if (-not (Test-Path $envFile)) {
     Write-Host 'Using the existing .env. Your account and data will be preserved.'
 }
 
+$chatModel = Get-EnvValue 'SOVEREIGN_MODEL'
+if (-not $chatModel) { $chatModel = 'qwen2.5:1.5b' }
+$embeddingModel = Get-EnvValue 'SOVEREIGN_EMBEDDING_MODEL'
+if (-not $embeddingModel) { $embeddingModel = 'nomic-embed-text' }
 $models = @(
-    (Get-EnvValue 'SOVEREIGN_MODEL'),
+    $chatModel,
     (Get-EnvValue 'SOVEREIGN_CODING_MODEL'),
     (Get-EnvValue 'SOVEREIGN_VISION_MODEL'),
-    (Get-EnvValue 'SOVEREIGN_EMBEDDING_MODEL')
-)
-if ($models | Where-Object { -not $_ }) { throw 'Model names are missing from .env.' }
+    $embeddingModel
+) | Where-Object { $_ } | Select-Object -Unique
 $ollamaImage = Get-EnvValue 'OLLAMA_IMAGE'
 if (-not $ollamaImage) { $ollamaImage = 'ollama/ollama:latest' }
 $webPort = Get-EnvValue 'WEB_PORT'
@@ -89,7 +89,7 @@ if (-not $webPort) { $webPort = '8080' }
 
 Invoke-Docker compose --env-file $envFile config --quiet | Out-Null
 Invoke-Docker compose --env-file $envFile build
-Invoke-Docker compose --env-file $envFile pull mongo redis qdrant ollama
+Invoke-Docker compose --env-file $envFile pull --policy missing mongo redis qdrant ollama
 Invoke-Docker volume create cldx-sovereign_ollama-models | Out-Null
 
 # The app has no internet route. Only this short-lived model loader can pull.
@@ -106,6 +106,11 @@ try {
     }
     if (-not $ready) { throw 'Ollama did not start in the model loader.' }
     foreach ($model in $models) {
+        & docker exec $loader ollama show $model *> $null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Using downloaded model $model."
+            continue
+        }
         Write-Host "Downloading $model to this computer..."
         Invoke-Docker exec $loader ollama pull $model
     }

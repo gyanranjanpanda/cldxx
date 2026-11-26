@@ -25,13 +25,14 @@ export default function ArtifactPanel() {
   const files    = artifact?.files ?? NO_FILES;
   const htmlFile = files.find(f => /\.html$/i.test(f.name) && /index/i.test(f.name))
                 ?? files.find(f => /\.html$/i.test(f.name));
+  const canPreview = import.meta.env.VITE_SOVEREIGN_ONLY !== "true" && Boolean(htmlFile);
 
   // Every hook has to run before the early return below. Putting this after it
   // changes the hook count the moment an artifact arrives, which unmounts the
   // whole app rather than just this panel.
   const previewDoc = useMemo(
-    () => buildPreviewDoc(files, htmlFile),
-    [files, htmlFile]
+    () => canPreview ? buildPreviewDoc(files, htmlFile) : "",
+    [canPreview, files, htmlFile]
   );
 
   // A generated game listens on its own window, so the iframe has to hold
@@ -104,7 +105,6 @@ export default function ArtifactPanel() {
 
   const fileIndex  = files[activeFile] ? activeFile : 0;
   const file       = files[fileIndex];
-  const canPreview = Boolean(htmlFile);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(file?.content || "");

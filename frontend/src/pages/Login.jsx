@@ -1,14 +1,12 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useDispatch } from "react-redux";
 import { FcGoogle } from "react-icons/fc";
-import { getRedirectResult, signInWithRedirect } from "firebase/auth";
-import { auth, googleProvider } from "../../firebase";
 import api from "../utils/axios";
 import { setUserData } from "../redux/user.slice";
-import GridScan from "../components/GridScan";
+const localAuth = import.meta.env.VITE_LOCAL_AUTH_ENABLED === "true";
+const GridScan = localAuth ? null : lazy(() => import("../components/GridScan"));
 
 function Login() {
-  const localAuth = import.meta.env.VITE_LOCAL_AUTH_ENABLED === "true";
   const dispatch = useDispatch();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -22,6 +20,8 @@ function Login() {
     const resolveRedirect = async () => {
       setLoading(true);
       try {
+        const { auth, getRedirectResult } = await import("../../firebase");
+        if (!active) return;
         const result = await getRedirectResult(auth);
         // A previous popup can have signed in to Firebase even when the API
         // rejected that login. Reuse that verified Firebase session too.
@@ -44,15 +44,16 @@ function Login() {
 
     resolveRedirect();
     return () => { active = false; };
-  }, [dispatch, localAuth]);
+  }, [dispatch]);
 
   const handleGoogleLogin = async () => {
-    if (loading) return;
+    if (localAuth || loading) return;
     setLoading(true);
     setError("");
 
     try {
       // A full-page redirect works in browsers that block OAuth popups.
+      const { auth, googleProvider, signInWithRedirect } = await import("../../firebase");
       await signInWithRedirect(auth, googleProvider);
     } catch (err) {
       console.error("Firebase Redirect Login Error:", err);
@@ -93,7 +94,7 @@ function Login() {
       {/* Animated wireframe grid. Positioned via inline style rather than a utility
           class: GridScan.css is unlayered, so its own `position: relative` outranks
           Tailwind's layered `absolute`. */}
-      <GridScan
+      {GridScan && <Suspense><GridScan
         style={{ position: "absolute", inset: 0 }}
         sensitivity={0.6}
         lineThickness={1.4}
@@ -114,7 +115,7 @@ function Login() {
         chromaticAberration={0.002}
         noiseIntensity={0.02}
         snapBackDelay={400}
-      />
+      /></Suspense>}
 
       {/* Keeps the card readable without killing the grid parallax underneath */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_38%_46%_at_50%_50%,rgba(0,0,0,0.75)_0%,rgba(0,0,0,0.3)_60%,transparent_100%)]" />

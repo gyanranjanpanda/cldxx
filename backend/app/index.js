@@ -79,17 +79,17 @@ app.use("/api/chat", protect, injectUser, withSovereignPolicy, json, chatRouter)
 if (process.env.BILLING_ENABLED !== "false") {
   app.use("/api/billing", protect, injectUser, json, billingRouter);
 }
-app.use("/api/mcp", protect, injectUser, json, mcpRouter);
-app.use("/api/keys", protect, injectUser, json, keysRouter);
-app.use("/api/invites", protect, injectUser, json, inviteRouter);
+if (process.env.SOVEREIGN_ONLY !== "true") {
+  app.use("/api/mcp", protect, injectUser, json, mcpRouter);
+  app.use("/api/keys", protect, injectUser, json, keysRouter);
+  app.use("/api/invites", protect, injectUser, json, inviteRouter);
 
-// Guests have no session by design, so this router is NOT behind `protect`.
-// Its own token check is the entire authorisation, and it can reach exactly
-// one conversation -- see modules/invite/controllers.
-app.use("/api/shared", json, sharedRouter);
+  // Guest links authenticate with their own scoped token.
+  app.use("/api/shared", json, sharedRouter);
 
-// No `json` here: the body is a raw audio blob, parsed inside the route.
-app.use("/api/speech", protect, speechRouter);
+  // The speech route reads a raw audio blob.
+  app.use("/api/speech", protect, speechRouter);
+}
 
 // Agent stays a separate process: puppeteer, langchain and the exporters have a
 // different memory/CPU profile and much slower deploys than the CRUD above.
