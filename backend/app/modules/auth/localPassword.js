@@ -1,8 +1,8 @@
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
 export const hashLocalPassword = (password) => {
-  if (typeof password !== "string" || password.length < 16) {
-    throw new Error("Local password must contain at least 16 characters");
+  if (typeof password !== "string" || password.length < 8) {
+    throw new Error("Local password must contain at least 8 characters");
   }
   const salt = randomBytes(16).toString("hex");
   const hash = scryptSync(password, salt, 64).toString("hex");

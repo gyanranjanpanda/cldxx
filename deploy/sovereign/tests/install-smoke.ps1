@@ -17,7 +17,7 @@ try {
 
     function global:Read-Host {
         param([string]$Prompt, [switch]$AsSecureString)
-        ConvertTo-SecureString 'a-local-password-with-20-chars' -AsPlainText -Force
+        ConvertTo-SecureString 'eight123' -AsPlainText -Force
     }
 
     $installer = Join-Path $installDir 'install.ps1'
@@ -27,7 +27,7 @@ try {
     if ($firstEnv -notmatch '(?m)^SOVEREIGN_MODEL=qwen2\.5:1\.5b\r?$') { throw 'Compact chat model was not configured.' }
     if ($firstEnv -notmatch '(?m)^FRONTEND_URL=http://127\.0\.0\.1:8080\r?$') { throw 'Local origin was not configured.' }
     if ($firstOutput -notmatch 'Sovereign Mode is ready at http://127.0.0.1:8080') { throw 'Installer did not complete.' }
-    if ($firstOutput -match 'a-local-password-with-20-chars') { throw 'Password leaked to installer output.' }
+    if ($firstOutput -match 'eight123') { throw 'Password leaked to installer output.' }
 
     $secondOutput = (& $installer *>&1 | Out-String)
     if ([IO.File]::ReadAllText($envFile) -ne $firstEnv) { throw 'Repeat installation changed the local account.' }

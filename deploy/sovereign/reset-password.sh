@@ -13,15 +13,15 @@ grep -q '^LOCAL_AUTH_PASSWORD_HASH=' "$env_file" || {
 command -v docker >/dev/null || { echo "Docker is required." >&2; exit 1; }
 docker info >/dev/null 2>&1 || { echo "Start Docker Desktop, then retry." >&2; exit 1; }
 
-printf 'New password (at least 16 characters): '
+printf 'New password (at least 8 characters): '
 IFS= read -rs new_password
 printf '\n'
 printf 'Confirm new password: '
 IFS= read -rs confirmation
 printf '\n'
 
-if [[ ${#new_password} -lt 16 || "$new_password" != "$confirmation" ]]; then
-  echo "Passwords must match and contain at least 16 characters." >&2
+if [[ ${#new_password} -lt 8 || "$new_password" != "$confirmation" ]]; then
+  echo "Passwords must match and contain at least 8 characters." >&2
   exit 1
 fi
 unset confirmation

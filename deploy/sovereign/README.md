@@ -28,7 +28,7 @@ cd cldxx\deploy\sovereign
 
 Create a password when prompted, then open **http://127.0.0.1:8080** on that same computer and sign in as `admin`. The installer creates a private `.env`, downloads models into a local Docker volume, builds and starts the services, and checks that the application network is isolated. Do not share the `.env` file. Running the installer again reuses the same account and volumes.
 
-If you forget the local password, reset it on that computer. The command prompts twice without showing the password, changes only the password hash in `.env`, and recreates the app container. Conversations, models, and artifacts remain in their volumes.
+If you forget the local password, reset it on that computer. Choose at least 8 characters. The command prompts twice without showing the password, changes only the password hash in `.env`, and recreates the app container. Conversations, models, and artifacts remain in their volumes.
 
 ```bash
 cd cldxx/deploy/sovereign
@@ -48,7 +48,7 @@ Use a Linux host with Docker Compose and enough memory for the selected models. 
 ```bash
 cd deploy/sovereign
 cp .env.example .env
-LOCAL_AUTH_NEW_PASSWORD='choose-at-least-16-characters' node ../../backend/app/scripts/hash-local-password.mjs
+LOCAL_AUTH_NEW_PASSWORD='choose-at-least-8-characters' node ../../backend/app/scripts/hash-local-password.mjs
 ```
 
 Copy the printed hash into `LOCAL_AUTH_PASSWORD_HASH` in `.env`. Replace `INTERNAL_API_KEY` with a random value. Keep `.env` out of version control. For local testing, the web port binds to `127.0.0.1:8080` and `COOKIE_SECURE=false`. For a production reverse proxy, set `FRONTEND_URL` and `SOVEREIGN_PUBLIC_URL` to its HTTPS origin and `COOKIE_SECURE=true`. The reverse proxy should forward `/api/` and `/artifacts/` to the web service without changing the path.

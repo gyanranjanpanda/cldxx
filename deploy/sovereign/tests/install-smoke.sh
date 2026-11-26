@@ -15,14 +15,14 @@ chmod +x "$tmpdir/bin/docker"
 export CLDX_MOCK_DOCKER="$source_dir/tests/docker_mock.py"
 export PATH="$tmpdir/bin:$PATH"
 
-printf 'a-local-password-with-20-chars\n' |
+printf 'eight123\n' |
   bash "$tmpdir/deploy/sovereign/install.sh" > "$tmpdir/first.log" 2>&1
 env_file="$tmpdir/deploy/sovereign/.env"
 grep -q '^SOVEREIGN_MODEL=qwen2.5:1.5b$' "$env_file"
 grep -q '^FRONTEND_URL=http://127.0.0.1:8080$' "$env_file"
 grep -q '^INTERNAL_API_KEY=[a-f0-9]\{64\}$' "$env_file"
 grep -q 'Sovereign Mode is ready at http://127.0.0.1:8080' "$tmpdir/first.log"
-if grep -q 'a-local-password-with-20-chars' "$tmpdir/first.log"; then
+if grep -q 'eight123' "$tmpdir/first.log"; then
   echo 'Password leaked to installer output' >&2
   exit 1
 fi

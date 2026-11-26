@@ -24,11 +24,11 @@ fi
 docker compose version >/dev/null || { echo "Docker Compose v2 is required." >&2; exit 1; }
 
 if [[ ! -f "$env_file" ]]; then
-  printf 'Create a password for this computer (at least 16 characters): '
+  printf 'Create a password for this computer (at least 8 characters): '
   IFS= read -rs local_password
   printf '\n'
-  if [[ ${#local_password} -lt 16 ]]; then
-    echo "Password must contain at least 16 characters." >&2
+  if [[ ${#local_password} -lt 8 ]]; then
+    echo "Password must contain at least 8 characters." >&2
     exit 1
   fi
 

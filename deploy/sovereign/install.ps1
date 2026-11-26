@@ -37,11 +37,11 @@ finally { Remove-Job $dockerCheck -Force }
 Invoke-Docker compose version | Out-Null
 
 if (-not (Test-Path $envFile)) {
-    $securePassword = Read-Host 'Create a password for this computer (at least 16 characters)' -AsSecureString
+    $securePassword = Read-Host 'Create a password for this computer (at least 8 characters)' -AsSecureString
     $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword)
     try { $password = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer) }
     finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
-    if ($password.Length -lt 16) { throw 'Password must contain at least 16 characters.' }
+    if ($password.Length -lt 8) { throw 'Password must contain at least 8 characters.' }
 
     $env:LOCAL_AUTH_NEW_PASSWORD = $password
     $password = $null

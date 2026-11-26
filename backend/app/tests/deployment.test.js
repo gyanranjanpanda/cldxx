@@ -4,11 +4,11 @@ import { hashLocalPassword, verifyLocalPassword } from "../modules/auth/localPas
 import { cloudRunIdentityToken } from "../utils/cloudRunIdentity.js";
 
 test("local password hash verifies the right password and rejects malformed hashes", () => {
-  const encoded = hashLocalPassword("a-long-random-password-for-testing");
-  assert.equal(verifyLocalPassword("a-long-random-password-for-testing", encoded), true);
+  const encoded = hashLocalPassword("eight123");
+  assert.equal(verifyLocalPassword("eight123", encoded), true);
   assert.equal(verifyLocalPassword("wrong-password", encoded), false);
   assert.equal(verifyLocalPassword("anything", "broken"), false);
-  assert.throws(() => hashLocalPassword("short"));
+  assert.throws(() => hashLocalPassword("seven77"));
 });
 
 test("Cloud Run token uses the service URL as audience and caches a valid token", async () => {
