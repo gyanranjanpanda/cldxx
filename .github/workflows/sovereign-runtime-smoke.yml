@@ -100,6 +100,12 @@ jobs:
           curl -fsS http://127.0.0.1:8080/api/chat/search-saved-chats \
             -H 'content-type: application/json' -b "$cookie" -d '{"query":"Private follow-up canary"}' -o "$response"
           python3 -c 'import json,sys; assert json.load(open(sys.argv[1]))["ids"] == [sys.argv[2]]' "$response" "$imported"
+          curl -fsS -X PATCH "http://127.0.0.1:8080/api/chat/conversations/$conversation/title" \
+            -H 'content-type: application/json' -b "$cookie" -d '{"title":"Renamed private chat"}' -o "$response"
+          curl -fsS -X PATCH "http://127.0.0.1:8080/api/chat/conversations/$imported/title" \
+            -H 'content-type: application/json' -b "$cookie" -d '{"title":"Renamed imported chat"}' -o "$response"
+          curl -fsS http://127.0.0.1:8080/api/chat/get-conversations -b "$cookie" -o "$response"
+          python3 -c 'import json,sys; chats={chat["_id"]:chat for chat in json.load(open(sys.argv[1]))}; assert chats[sys.argv[2]]["title"] == "Renamed private chat"; assert chats[sys.argv[3]]["title"] == "Renamed imported chat"' "$response" "$conversation" "$imported"
           ./verify-containment.sh
       - name: Show service logs on failure
         if: failure()

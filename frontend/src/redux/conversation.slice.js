@@ -112,17 +112,15 @@ removeConversation:(state,action)=>{
 
 setConvTitle:(state,action)=>{
 
- const {
-  conversationId,
-  title
- } = action.payload;
+ const { conversationId, title, titleEdited } = action.payload;
+ const titleFields = titleEdited === undefined ? { title } : { title, titleEdited };
 
  state.conversations =
  state.conversations.map((conv)=>
   conv._id === conversationId
    ? {
       ...conv,
-      title
+      ...titleFields
      }
    : conv
  );
@@ -134,7 +132,7 @@ setConvTitle:(state,action)=>{
 
   state.selectedConversation = {
    ...state.selectedConversation,
-   title
+   ...titleFields
   };
 
  }

@@ -1,5 +1,5 @@
 import express from "express";
-import { createConversation, deleteConversation, getConversations, getMessages, saveMessage, searchSavedChats, updateConversation } from "../controllers/chat.controller.js";
+import { createConversation, deleteConversation, getConversations, getMessages, renameConversation, saveMessage, searchSavedChats, updateConversation } from "../controllers/chat.controller.js";
 
 
 
@@ -10,6 +10,7 @@ router.post("/create-conversation",createConversation);
 router.get("/get-conversations",getConversations);
 router.post("/search-saved-chats", searchSavedChats);
 router.post("/update-conversation",updateConversation);
+router.patch("/conversations/:id/title", renameConversation);
 router.post("/save-message",saveMessage);
 router.get("/get-messages/:id",getMessages);
 router.delete("/delete-conversation/:id",deleteConversation);

@@ -1,5 +1,10 @@
 import api from "../utils/axios";
 
+export const renameConversation = async (id, title, sovereign) => {
+ const { data } = await api.patch(`/api/chat/conversations/${id}/title`, { title, sovereign });
+ return data;
+};
+
 export const searchSavedChats = async (query, signal) => {
  const { data } = await api.post("/api/chat/search-saved-chats", { query }, { signal });
  return data.ids;

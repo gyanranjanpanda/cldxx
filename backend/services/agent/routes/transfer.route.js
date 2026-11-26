@@ -20,6 +20,7 @@ const failure = (res, status, message) => res.status(status).json({ success: fal
 // collections never enter this archive, even if their schemas change.
 const conversationRecord = (row) => ({
   id: String(row._id), title: String(row.title || "New Chat"),
+  titleEdited: row.titleEdited === true,
   createdAt: row.createdAt || null, updatedAt: row.updatedAt || null
 });
 const messageRecord = (row) => ({
@@ -157,7 +158,7 @@ router.post("/import", express.raw({ type: ["application/zip", "application/octe
     for (const row of manifest.conversations) {
       const _id = localId("conversation", userId, manifest.sourceUserId, row.id);
       await conversations.updateOne({ _id }, { $setOnInsert: {
-        _id, userId, title: row.title,
+        _id, userId, title: row.title, titleEdited: row.titleEdited === true,
         createdAt: new Date(row.createdAt || Date.now()),
         updatedAt: new Date(row.updatedAt || Date.now())
       } }, { upsert: true });

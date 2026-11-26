@@ -299,6 +299,44 @@ export const updateConversation = async (req, res) => {
 
 };
 
+export const renameConversation = async (req, res) => {
+  const id = req.params.id;
+  const userId = req.user?.userId;
+  const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
+  if (!userId) return res.sendStatus(401);
+  if (!mongoose.isValidObjectId(id) || !title || title.length > 120) {
+    return res.status(400).json({ message: "Enter a chat name of 1 to 120 characters." });
+  }
+
+  const filter = { _id: id, userId: String(userId) };
+  const rename = (Chats) => Chats.findOneAndUpdate(filter, { $set: { title, titleEdited: true } }, {
+    new: true, timestamps: false, projection: { title: 1, titleEdited: 1 },
+  }).lean();
+
+  try {
+    const sovereign = zoneOf(req);
+    const localOnly = process.env.LOCAL_AUTH_ENABLED === "true" &&
+      req.sovereignPolicy === "sovereign_only" && sovereignStoreConfigured();
+    if (sovereign) {
+      const restricted = sovereignModels();
+      const chat = restricted && await rename(restricted.Conversation);
+      if (chat) return res.json(chat);
+
+      // An imported conversation can have its title in the local import
+      // database. Only the offline installation may rename that row here.
+      if (!localOnly) {
+        return res.status(409).json({ message: "This chat cannot be renamed in Sovereign Mode on this server." });
+      }
+    }
+
+    const chat = await rename(Conversation);
+    if (!chat) return res.status(404).json({ message: "Chat not found." });
+    return res.json(chat);
+  } catch {
+    return res.status(500).json({ message: "Could not rename the chat." });
+  }
+};
+
 export const deleteConversation = async (req, res) => {
 
   try {

@@ -118,7 +118,7 @@ useEffect(() => {
 
 }, [messages.length, isLoading]);
   useEffect(() => {
-    if (selectedConversation?.title === "New Chat") return;
+    if (selectedConversation?.title === "New Chat" && !selectedConversation.titleEdited) return;
     // Nothing is selected on first load. Without this the effect requested
     // /get-messages/undefined, which Mongo rejects as an invalid ObjectId --
     // a 500 and an unhandled axios rejection on every visit.

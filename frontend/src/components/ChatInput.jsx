@@ -327,7 +327,7 @@ const toggleMic = () => {
           conversation = newConversation;
         }
 
-        if (conversation.title === "New Chat") {
+        if (conversation.title === "New Chat" && !conversation.titleEdited) {
           await updateConversations(conversation._id, title, Boolean(sovereign));
           dispatch(setConvTitle({ conversationId: conversation._id, title }));
         }

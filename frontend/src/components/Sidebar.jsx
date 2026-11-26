@@ -7,8 +7,8 @@ import {
 import { useDispatch, useSelector } from "react-redux";
 import api from "../utils/axios";
 import { setUserData } from "../redux/user.slice";
-import { deleteConversation, getConversations, searchSavedChats } from "../features/conversation.api";
-import { removeConversation, setConversations, setIncognito, setSelectedAgent, setSelectedConversation } from "../redux/conversation.slice";
+import { deleteConversation, getConversations, renameConversation, searchSavedChats } from "../features/conversation.api";
+import { removeConversation, setConversations, setConvTitle, setIncognito, setSelectedAgent, setSelectedConversation } from "../redux/conversation.slice";
 import { getMessages } from "../features/message.api";
 import { setArtifacts, setMessages } from "../redux/message.slice";
 import { AGENTS } from "../constants/agents";
@@ -69,6 +69,9 @@ export default function Sidebar() {
   // firing straight away — a stray click in a list is far too easy.
   const [confirmingId, setConfirmingId] = useState(null);
   const [deletingId, setDeletingId]     = useState(null);
+  const [renameDraft, setRenameDraft] = useState(null);
+  const [renaming, setRenaming] = useState(false);
+  const [renameError, setRenameError] = useState("");
   const [collapsed, setCollapsed]       = useState(false);
   const [mobileOpen, setMobileOpen]     = useState(false);
   const [imageError, setImageError]     = useState(false);
@@ -234,6 +237,23 @@ export default function Sidebar() {
   const handlePickAgent = (agentId) => {
     dispatch(setSelectedAgent(agentId));
     handleCreateConversation();
+  };
+
+  const handleRenameConversation = async (event) => {
+    event.preventDefault();
+    const title = renameDraft.title.trim();
+    if (!title || renaming) return;
+    setRenaming(true);
+    setRenameError("");
+    try {
+      const chat = await renameConversation(renameDraft.id, title, sovereign);
+      dispatch(setConvTitle({ conversationId: chat._id, title: chat.title, titleEdited: chat.titleEdited }));
+      setRenameDraft(null);
+    } catch (error) {
+      setRenameError(error.response?.data?.message || "Could not rename the chat.");
+    } finally {
+      setRenaming(false);
+    }
   };
 
   const handleDeleteConversation = async (conversationId) => {
@@ -580,6 +600,32 @@ export default function Sidebar() {
                   </p>
 
                   {items.map((chat) => {
+                    if (renameDraft?.id === chat._id) return (
+                      <form key={chat._id} onSubmit={handleRenameConversation} className="mb-1 px-2">
+                        <div className="flex items-center gap-1">
+                          <input
+                            autoFocus
+                            aria-label="New chat title"
+                            value={renameDraft.title}
+                            maxLength={120}
+                            disabled={renaming}
+                            onFocus={event => event.target.select()}
+                            onChange={event => setRenameDraft({ id: chat._id, title: event.target.value })}
+                            onKeyDown={event => {
+                              if (event.key === "Escape" && !renaming) setRenameDraft(null);
+                            }}
+                            className="min-w-0 flex-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-sm text-slate-100"
+                          />
+                          <button type="submit" disabled={renaming || !renameDraft.title.trim()} title="Save title" aria-label="Save title" className="p-1 text-blue-400 disabled:opacity-50">
+                            {renaming ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                          </button>
+                          <button type="button" disabled={renaming} onClick={() => setRenameDraft(null)} title="Cancel rename" aria-label="Cancel rename" className="p-1 text-slate-400">
+                            <X size={14} />
+                          </button>
+                        </div>
+                        {renameError && <p role="alert" className="pt-1 text-xs text-red-400">{renameError}</p>}
+                      </form>
+                    );
                     const isActive = selectedConversation?._id === chat._id;
                     const isHov    = hovered === chat._id;
                     return (
@@ -598,6 +644,22 @@ export default function Sidebar() {
                         {/* Sharing is per conversation, so the action lives on the row.
                   Requiring the chat to be open first is what made the feature
                   hard to find at all. */}
+              {confirmingId !== chat._id && deletingId !== chat._id && (
+                <button
+                  title="Rename chat"
+                  aria-label="Rename chat"
+                  disabled={renaming}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setRenameError("");
+                    setRenameDraft({ id: chat._id, title: chat.title || "" });
+                  }}
+                  className={`flex shrink-0 items-center justify-center w-6 h-6 rounded-md bg-transparent text-slate-500 hover:bg-white/[0.08] hover:text-blue-300 focus-visible:opacity-100
+                    ${isHov || isActive ? "opacity-100" : "opacity-100 lg:opacity-0"}`}
+                >
+                  <PenSquare size={12} />
+                </button>
+              )}
               {confirmingId !== chat._id && deletingId !== chat._id && (
                 <button
                   title="Share this chat"
