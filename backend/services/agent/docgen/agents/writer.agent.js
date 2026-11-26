@@ -16,7 +16,7 @@
  * Sections are independent, so they still run concurrently.
  */
 
-import { getModel }    from "../../utils/model.js";
+import { getModel, invokePdfModel } from "../../utils/model.js";
 import { extractJson } from "../schemas/document.schema.js";
 import { getLayout, wordBudget } from "../design/layouts.js";
 import { bus }         from "../events/bus.js";
@@ -167,9 +167,12 @@ Write this section only.`;
     { role: "user",   content: userPrompt },
   ]);
 
-  const parsed = extractJson(response?.content?.trim() ?? "");
+  const parsed = extractJson(response.text ?? response.content ?? "");
+  return finishSection(spec, layout, budget, parsed?.blocks, jobId);
+}
 
-  if (!parsed?.blocks || !Array.isArray(parsed.blocks)) {
+function finishSection(spec, layout, budget, blocks, jobId) {
+  if (!Array.isArray(blocks) || !blocks.length || blocks.some((block) => !block || typeof block.type !== "string")) {
     console.warn(`[writer] Section "${spec.name}" returned invalid blocks — using fallback`);
     return [
       { type: "heading", text: spec.name, level: 1 },
@@ -182,7 +185,6 @@ Write this section only.`;
   // This holds even for layouts whose prompt omits `heading` (metrics, quote):
   // there the renderer consumes the heading as the page title instead of drawing
   // it, so it costs nothing but keeps section boundaries findable.
-  let blocks = parsed.blocks;
   if (blocks[0]?.type !== "heading") {
     blocks = [{ type: "heading", text: spec.name, level: 1 }, ...blocks];
   } else {
@@ -196,6 +198,35 @@ Write this section only.`;
     jobId, sectionId: spec.id, layout: layout.id, blockCount: fitted.length, trimmed,
   });
   return fitted;
+}
+
+async function writeCloudPdfSections(sections, context, jobId) {
+  const specs = sections.map((section) => {
+    const layout = getLayout(section.layout);
+    return { id: section.id, name: section.name, description: section.description,
+      maxWords: wordBudget(layout.id, "pdf"), blockTypes: layout.blocks };
+  });
+  const blockTypes = new Set(specs.flatMap((section) => section.blockTypes));
+  const blockExamples = [...blockTypes].map((type) => BLOCK_SPECS[type]).filter(Boolean).join("\n");
+  const response = await invokePdfModel({ ...context.modelState, sovereign: false }, [
+    { role: "system", content: `Write all the planned sections of a PDF. Return a single JSON object with the shape
+{"sections":[{"id":"the given ID","blocks":[...]}]}. Include each requested section exactly once and use only its allowed block types.
+Stay within each section's word budget. Use concrete examples and plain prose. Do not invent data; label illustrative numbers as examples.
+Block formats:
+${blockExamples}` },
+    { role: "user", content: JSON.stringify({ topic: context.topic, tone: context.style, sections: specs }) },
+  ]);
+  const parsed = extractJson(response.text ?? response.content ?? "");
+  if (!Array.isArray(parsed?.sections)) throw new Error("PDF writer returned invalid sections");
+  const blocksById = new Map(parsed.sections.filter(Boolean).map((section) => [section.id, section.blocks]));
+  if (!sections.every((section) => Array.isArray(blocksById.get(section.id)) && blocksById.get(section.id).length)) {
+    throw new Error("PDF writer did not return content for every section");
+  }
+
+  return sections.flatMap((section) => {
+    const layout = getLayout(section.layout);
+    return finishSection(section, layout, wordBudget(layout.id, "pdf"), blocksById.get(section.id), jobId);
+  });
 }
 
 // ─── Concurrency ──────────────────────────────────────────────────────────────
@@ -240,6 +271,12 @@ async function batchedMap(items, batchSize, delayMs, fn) {
  */
 export async function writeAllSections(sections, context, jobId = "") {
   bus.emit("writer.started", { jobId, sectionCount: sections.length });
+
+  if (context.format === "pdf" && !context.sovereign) {
+    const blocks = await writeCloudPdfSections(sections, context, jobId);
+    bus.emit("writer.finished", { jobId, blockCount: blocks.length });
+    return blocks;
+  }
 
   const BATCH_SIZE = 3;
   const BATCH_DELAY_MS = 15000;

@@ -14,18 +14,23 @@ import { generateDocument } from "../docgen/pipeline.js";
 import { storeArtifact }     from "../utils/storage.js";
 import { checkAgentLimit }   from "../config/agentRateLimit.js";
 import { deductCredits }     from "../utils/deductCredits.js";
+import { internalApi }       from "../utils/internalApi.js";
+import { isProviderRateLimit } from "../utils/model.js";
 
 export const pdfAgent = async (state) => {
+  let charged = false;
   try {
 
     await checkAgentLimit(state.userId, "pdf");
     await deductCredits(state.userId, "pdf");
+    charged = true;
 
     const { buffer, meta } = await generateDocument({
       topic:  state.prompt,
       theme:  "professional",
       format: "pdf",
       sovereign: state.sovereign === true,
+      modelState: { keys: state.keys, userId: state.userId, conversationId: state.conversationId, trace: state.trace },
     });
 
     const fileName = `pdf-${Date.now()}.pdf`;
@@ -47,7 +52,19 @@ export const pdfAgent = async (state) => {
       response: pdfResponse,
     };
   } catch (error) {
-    console.error("[pdfAgent] Error:", error);
+    const status = error?.status ?? error?.response?.status;
+    console.error("[pdfAgent] Generation failed", {
+      conversationId: state.conversationId, status, errorType: error?.name,
+    });
+    if (charged) {
+      try {
+        await internalApi.patch("/refund-credits", { userId: state.userId, agent: "pdf" }, { timeout: 5000 });
+      } catch (refundError) {
+        console.error("[pdfAgent] Credit refund failed", {
+          conversationId: state.conversationId, status: refundError?.response?.status,
+        });
+      }
+    }
 
     // Surface credit / rate-limit errors directly
     const apiError = error?.data ?? error?.response?.data;
@@ -59,12 +76,30 @@ export const pdfAgent = async (state) => {
       };
     }
 
-    // Detect Gemini API rate limits
-    const isRateLimit = error?.status === 429 || error?.message?.includes("429") || error?.message?.includes("quota");
-    if (isRateLimit) {
+    if (!charged && status === 429 && apiError?.retryAfter) {
       return {
         ...state,
-        response: "❌ **AI Rate Limit**\n\nThe AI service is temporarily rate-limited. Please wait 1 minute and try again.",
+        response: `❌ **PDF request limit**\n\n${apiError.message}`,
+        isError: true,
+      };
+    }
+
+    if (isProviderRateLimit(error)) {
+      const dailyQuota = /per day|perday|daily quota/i.test(error?.message || "");
+      console.warn("[pdfAgent] Provider quota reached", { conversationId: state.conversationId, dailyQuota });
+      return {
+        ...state,
+        response: dailyQuota
+          ? "❌ **Cloud PDF quota reached**\n\nThe AI provider has reached its daily quota. Try again after the quota resets."
+          : "❌ **Cloud PDF rate limit**\n\nThe AI provider is temporarily limiting PDF requests. Try again later.",
+        isError: true,
+      };
+    }
+
+    if (status === 503) {
+      return {
+        ...state,
+        response: "❌ **PDF service temporarily unavailable**\n\nThe AI provider is at capacity. Try again shortly.",
         isError: true,
       };
     }

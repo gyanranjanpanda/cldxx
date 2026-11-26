@@ -44,6 +44,33 @@ const keyFor = (provider, state) =>
 // True when *someone* can pay for DeepSeek on this turn -- the user or us.
 const deepseekConfigured = (state) => Boolean(keyFor("deepseek", state));
 
+const googlePdf = (state, model) => new ChatGoogleGenerativeAI({
+  model,
+  apiKey: keyFor("google", state),
+  temperature: 0,
+  maxRetries: 0,
+});
+
+export const isProviderRateLimit = (error) =>
+  error?.status === 429 || error?.response?.status === 429 ||
+  /\b429\b|RESOURCE_EXHAUSTED/i.test(error?.message || "");
+
+export async function invokePdfModel(state, messages) {
+  try {
+    return await getModel("pdf", state).invoke(messages);
+  } catch (error) {
+    const primary = process.env.GOOGLE_PDF_MODEL || "gemini-2.5-flash";
+    const fallback = process.env.GOOGLE_PDF_FALLBACK_MODEL;
+    const unavailable = error?.status === 503 || error?.response?.status === 503;
+    if (state.sovereign || !fallback || fallback === primary || !keyFor("google", state) ||
+        (!isProviderRateLimit(error) && !unavailable)) throw error;
+    console.warn("[pdf] Primary provider at capacity, trying configured fallback", {
+      conversationId: state.conversationId, fallback,
+    });
+    return await googlePdf(state, fallback).invoke(messages);
+  }
+}
+
 const deepseek = (state, { maxTokens } = {}) =>
   new ChatDeepSeek({
     apiKey: keyFor("deepseek", state),
@@ -207,6 +234,9 @@ export const getModel =
    // sovereign.js already groups all three under SOVEREIGN_DOC_MODEL, so
    // leaving it out here sent it to the Groq default and split the two layers.
    case "pdf":
+     if (deepseekConfigured(state)) return deepseek(state);
+     return googlePdf(state, process.env.GOOGLE_PDF_MODEL || "gemini-2.5-flash");
+
    case "ppt":
    case "pdf_rag":
      if (deepseekConfigured(state)) return deepseek(state);

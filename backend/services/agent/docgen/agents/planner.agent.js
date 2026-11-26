@@ -10,7 +10,7 @@
  * The planner does NOT write content — only structure.
  */
 
-import { getModel }      from "../../utils/model.js";
+import { getModel, invokePdfModel } from "../../utils/model.js";
 import { extractJson }   from "../schemas/document.schema.js";
 import { layoutCatalogue, enforceRhythm, LAYOUTS } from "../design/layouts.js";
 import { bus }           from "../events/bus.js";
@@ -62,16 +62,18 @@ RULES:
  * @returns {Promise<{ title: string, subtitle: string, sections: object[] }>}
  */
 export async function plan(topic, opts = {}) {
-  const { jobId = "", format = "pdf", style = "Professional", sovereign = false } = opts;
+  const { jobId = "", format = "pdf", style = "Professional", sovereign = false, modelState = {} } = opts;
   bus.emit("planner.started", { jobId, topic, format });
 
-  const llm = getModel(format === "pptx" ? "ppt" : "pdf", { sovereign });
-  const response = await llm.invoke([
+  const messages = [
     { role: "system", content: systemPrompt(format) },
     { role: "user",   content: `Create an outline for: ${topic}\n\nTone: ${style}` },
-  ]);
+  ];
+  const response = format === "pdf" && !sovereign
+    ? await invokePdfModel({ ...modelState, sovereign }, messages)
+    : await getModel(format === "pptx" ? "ppt" : "pdf", { sovereign }).invoke(messages);
 
-  const parsed = extractJson(response?.content?.trim() ?? "");
+  const parsed = extractJson(response.text ?? response.content ?? "");
 
   if (!parsed || !Array.isArray(parsed.sections) || parsed.sections.length === 0) {
     throw new Error("Planner returned invalid outline JSON");

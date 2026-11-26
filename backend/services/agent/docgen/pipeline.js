@@ -39,6 +39,7 @@ export async function generateDocument(opts) {
     // section would be written by a cloud model on a turn the user marked
     // confidential.
     sovereign = false,
+    modelState = {},
   } = opts;
 
   const format = FORMAT_ALIASES[opts.format ?? "pdf"] ?? "pdf";
@@ -46,12 +47,12 @@ export async function generateDocument(opts) {
   const medium = format === "pptx" ? "pptx" : "pdf";
 
   // ── 1. Plan (layout-first) ──────────────────────────────────────────────
-  const outline = await plan(topic, { jobId, format: medium, style, sovereign });
+  const outline = await plan(topic, { jobId, format: medium, style, sovereign, modelState });
 
   // ── 2. Write into those layouts ─────────────────────────────────────────
   const blocks = await writeAllSections(
     outline.sections,
-    { topic, style, format: medium, sovereign },
+    { topic, style, format: medium, sovereign, modelState },
     jobId,
   );
 
