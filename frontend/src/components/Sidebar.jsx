@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Plus, MessageSquare, LogOut, User, PenSquare, Menu, X,
   CoinsIcon, Trash2, Check, Loader2, Search, ChevronDown, Sparkles, Ghost, Plug, Share2,
-  KeyRound
+  KeyRound, Download, Upload
 } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import api from "../utils/axios";
@@ -85,6 +85,9 @@ export default function Sidebar() {
   const [searchOpen, setSearchOpen]     = useState(false);
   const [query, setQuery]               = useState("");
   const [agentsOpen, setAgentsOpen]     = useState(false);
+  const [transferBusy, setTransferBusy] = useState(false);
+  const [transferNotice, setTransferNotice] = useState("");
+  const isLocalSovereign = import.meta.env.VITE_SOVEREIGN_ONLY === "true";
 
   const { userData } = useSelector(state => state.user);
   const { conversations, selectedConversation, selectedAgent, incognito } = useSelector(state => state.conversation);
@@ -97,6 +100,46 @@ export default function Sidebar() {
     } catch (error) {
       console.log(error);
     }
+  };
+
+  const exportCloudContent = async () => {
+    setTransferBusy(true);
+    setTransferNotice("");
+    try {
+      const response = await api.get("/api/transfer/export", { responseType: "blob" });
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "cldx-cloud-content.zip";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      setTransferNotice("Export downloaded. Import this ZIP in your local Sovereign app.");
+    } catch (error) {
+      setTransferNotice(error.response?.status === 404
+        ? "Cloud export is not available on this server yet."
+        : "Could not export cloud content. Please try again.");
+    } finally { setTransferBusy(false); }
+  };
+
+  const importCloudContent = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setTransferBusy(true);
+    setTransferNotice("");
+    try {
+      const response = await api.post("/api/transfer/import", file, {
+        headers: { "Content-Type": "application/zip" }
+      });
+      const result = response.data;
+      dispatch(setConversations(await getConversations()));
+      setTransferNotice(`Imported ${result.conversations} chats, ${result.messages} messages, and ${result.artifacts} files.` +
+        (result.missingArtifacts ? ` ${result.missingArtifacts} older files were unavailable.` : ""));
+    } catch (error) {
+      setTransferNotice(error.response?.data?.message || "Could not import this ZIP file.");
+    } finally { setTransferBusy(false); }
   };
 
   useEffect(() => {
@@ -576,6 +619,24 @@ export default function Sidebar() {
 
           {/* Footer */}
           <div className="px-2.5 py-2.5 border-t border-white/[0.06]">
+            {userData && (
+              <div className="pb-2">
+                {isLocalSovereign ? (
+                  <label className={`${navRow(false)} relative`}>
+                    <Upload size={15} className="shrink-0 text-slate-400" />
+                    {transferBusy ? "Importing…" : "Import cloud content"}
+                    <input type="file" accept=".zip,application/zip" disabled={transferBusy}
+                      onChange={importCloudContent} className="absolute inset-0 opacity-0 cursor-pointer" />
+                  </label>
+                ) : (
+                  <button onClick={exportCloudContent} disabled={transferBusy} className={navRow(false)}>
+                    <Download size={15} className="shrink-0 text-slate-400" />
+                    {transferBusy ? "Exporting…" : "Export cloud content"}
+                  </button>
+                )}
+                {transferNotice && <p role="status" className="px-3 pt-1 text-[11px] text-slate-400">{transferNotice}</p>}
+              </div>
+            )}
             {userData ? (
               <div className="flex items-center gap-2.5 cursor-pointer rounded-xl px-2.5 py-2 hover:bg-white/[0.05] transition-colors duration-150">
                 <div className="relative shrink-0">

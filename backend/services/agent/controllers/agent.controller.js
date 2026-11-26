@@ -6,6 +6,8 @@ import { resolveSovereign, assertRedisLocal } from "../utils/sovereign.js";
 import { audit } from "../utils/audit.js";
 import { fetchUserKeys } from "../utils/userKeys.js";
 import { createTrace, traceSpan, recordBreakpoint, endTrace } from "../utils/diagnostics/tracer.js";
+import fs from "fs/promises";
+import { storeArtifact } from "../utils/storage.js";
 
 export const chat = async (req, res, next) => {
   let trace = null;
@@ -68,10 +70,21 @@ export const chat = async (req, res, next) => {
     // Redis still gets the turn either way -- that is what makes the next message
     // aware of this one. For incognito it expires on its own.
     await traceSpan(trace, "INGRESS_PERSIST", async () => {
+      // Retain new non-incognito uploads with their conversation so a later
+      // cloud export can carry the file into the local Sovereign installation.
+      let savedContent = prompt;
+      if (req.file && !isIncognito) {
+        const fileUrl = await storeArtifact(
+          await fs.readFile(req.file.path), req.file.originalname, req.file.mimetype,
+          { sovereign: isSovereignTurn, persistent: true,
+            userId: req.headers["x-user-id"], conversationId }
+        );
+        savedContent += `\n\n[Uploaded file](${fileUrl})`;
+      }
       await addMessage(
         conversationId,
         "user",
-        prompt,
+        savedContent,
         { sovereign: isSovereignTurn }
       );
 
@@ -79,7 +92,7 @@ export const chat = async (req, res, next) => {
         await internalApi.post("/save-message", {
           conversationId,
           role: "user",
-          content: prompt,
+          content: savedContent,
           sovereign: isSovereignTurn
         });
       }

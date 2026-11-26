@@ -107,8 +107,9 @@ async(buffer, fileName, contentType, state = {})=>{
   const name =
    `${token()}${extensionOf(fileName)}`;
 
-  const expiresAt =
-   Date.now() + ARTIFACT_TTL_MS;
+  const expiresAt = state.persistent === true
+   ? null
+   : Date.now() + ARTIFACT_TTL_MS;
 
   fs.writeFileSync(
    path.join(SOVEREIGN_ARTIFACT_DIR, name),

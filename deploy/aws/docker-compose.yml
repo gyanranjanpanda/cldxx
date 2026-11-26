@@ -83,6 +83,7 @@ services:
       POLLINATIONS_IMAGE_MODEL: "${POLLINATIONS_IMAGE_MODEL:-black-forest-labs/flux.1-schnell}"
       GROQ_MODEL: "${GROQ_MODEL:-openai/gpt-oss-120b}"
       LOCAL_ARTIFACT_STORAGE: "true"
+      CLOUD_EXPORT_ENABLED: "true"
       ARTIFACT_DIR: /app/services/agent/artifacts
       # Relative links keep the browser's Vercel session cookie on downloads.
       ARTIFACT_PUBLIC_URL: ""

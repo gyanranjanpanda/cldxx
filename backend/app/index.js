@@ -94,6 +94,8 @@ app.use("/api/speech", protect, speechRouter);
 // Agent stays a separate process: puppeteer, langchain and the exporters have a
 // different memory/CPU profile and much slower deploys than the CRUD above.
 app.use("/api/agent", protect, withSovereignPolicy, proxyWithUser(AGENT_SERVICE));
+app.use("/api/transfer", protect, withSovereignPolicy,
+  proxyWithUser(AGENT_SERVICE, { preservePath: true, bodyLimit: "128mb" }));
 
 // Sovereign artefacts are written to the agent's local disk instead of S3, so
 // the agent serves them -- but in a sealed deployment the agent is on a network

@@ -1,0 +1,59 @@
+name: Cloud to Sovereign content transfer
+
+on:
+  push:
+    paths:
+      - '.github/workflows/content-transfer.yml'
+      - 'backend/app/index.js'
+      - 'backend/app/utils/proxyWithHeaders.js'
+      - 'backend/services/agent/**'
+      - 'backend/shared/**'
+      - 'deploy/aws/docker-compose.yml'
+      - 'deploy/sovereign/**'
+      - 'frontend/src/components/Sidebar.jsx'
+  pull_request:
+    paths:
+      - '.github/workflows/content-transfer.yml'
+      - 'backend/app/index.js'
+      - 'backend/app/utils/proxyWithHeaders.js'
+      - 'backend/services/agent/**'
+      - 'backend/shared/**'
+      - 'deploy/aws/docker-compose.yml'
+      - 'deploy/sovereign/**'
+      - 'frontend/src/components/Sidebar.jsx'
+
+permissions:
+  contents: read
+
+jobs:
+  transfer-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            backend/services/agent/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: backend
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: backend/services/agent
+      - run: node --test tests/transfer.test.js tests/storage.test.js
+        working-directory: backend/services/agent
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend

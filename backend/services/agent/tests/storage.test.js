@@ -157,6 +157,23 @@ test("the single-server cloud profile stores downloads locally without S3", asyn
   }
 });
 
+test("saved uploads remain available for a later content export", async () => {
+  process.env.LOCAL_ARTIFACT_STORAGE = "true";
+  try {
+    const url = await storeArtifact(Buffer.from("UPLOAD"), "notes.txt", "text/plain", {
+      userId: "cloud-user", conversationId: "cloud-conv", persistent: true
+    });
+    const name = nameFrom(url);
+    const metadata = JSON.parse(fs.readFileSync(path.join(SOVEREIGN_ARTIFACT_DIR, `${name}.meta.json`)));
+    assert.equal(metadata.expiresAt, null);
+    assert.equal(readArtifact(name).ok, true);
+    sweepArtifacts();
+    assert.equal(readArtifact(name).ok, true);
+  } finally {
+    delete process.env.LOCAL_ARTIFACT_STORAGE;
+  }
+});
+
 test.after(() => {
   fs.rmSync(scratch, { recursive: true, force: true });
 });

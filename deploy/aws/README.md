@@ -158,6 +158,11 @@ settings to work in browsers that block third-party storage. Set
 gateway with `sudo docker compose --env-file .env up -d app` after changing it.
 The original Lightsail hostname remains an allowed origin for fallback access.
 
+Signed-in users can select **Export cloud content** in the sidebar to download
+their conversations, messages and available artifacts as a ZIP. They can import
+that ZIP in a separately installed local Sovereign app. The export excludes
+credentials and content already stored in a restricted Sovereign database.
+
 ## 7. Operate or remove it
 
 - Back up MongoDB, and test a restore. Back up the `.env`

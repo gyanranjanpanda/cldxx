@@ -8,8 +8,7 @@ import {
  queuePrompt
 } from "../utils/comfy.js";
 
-import { uploadToS3 } from "../utils/uploadToS3.js";
-import { getDownloadUrl } from "../utils/getDownloadUrl.js";
+import { storeArtifact } from "../utils/storage.js";
 import { checkAgentLimit } from "../config/agentRateLimit.js";
 import { deductCredits } from "../utils/deductCredits.js";
 import { addMessage, isEphemeral } from "../utils/memory.js";
@@ -359,25 +358,17 @@ async (req, res, next) => {
 
   }
 
-  // Cloud instances do not share a filesystem. A local fallback would return a
-  // URL to a file in the agent container that the gateway cannot serve.
+  // The Lightsail profile has a persistent artifact volume served through the
+  // authenticated gateway. Other profiles still use storage.js's S3 path.
   const fileName =
    `image-${Date.now()}.${image.extension}`;
 
   let downloadUrl = null;
 
   try {
-   await uploadToS3(
-    image.buffer,
-    fileName,
-    image.contentType
-   );
-
-   downloadUrl =
-    await getDownloadUrl(
-     fileName,
-     LINK_TTL_SECONDS
-    );
+   downloadUrl = await storeArtifact(image.buffer, fileName, image.contentType, {
+    userId: job.userId, conversationId: job.conversationId, agent: "image"
+   });
   } catch (s3Error) {
    await redis.del(claimKey(promptId));
    const error = new Error(`Image storage unavailable: ${s3Error.message}`);

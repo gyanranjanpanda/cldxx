@@ -16,6 +16,7 @@ import multer from "multer";
 import connectDB from "./config/db.js";
 import redis from "../../shared/redis/redis.js";
 import router from "./routes/agent.route.js";
+import transferRouter from "./routes/transfer.route.js";
 import { readArtifact, startArtifactSweeper } from "./utils/storage.js";
 const app = express();
 app.use(express.json());
@@ -77,6 +78,7 @@ app.get("/artifacts/:name", (req, res) => {
 
 });
 
+app.use("/api/transfer", transferRouter);
 app.use("/",router);
 
 app.use((err, req, res, next) => {
