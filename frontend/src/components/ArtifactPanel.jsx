@@ -1,7 +1,8 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useSelector } from "react-redux";
-import Editor from "@monaco-editor/react";
 import { FiCode } from "react-icons/fi";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { detectLanguage } from "../utils/detectLanguage";
 import { buildPreviewDoc } from "../utils/buildPreviewDoc";
 import { Code2, Eye, PanelRightClose, PanelRightOpen, X, Copy, Check, AlertTriangle } from "lucide-react";
@@ -101,7 +102,8 @@ export default function ArtifactPanel() {
   // the moment an artifact arrives and unmounts the whole app.
   if (!artifact) return null;
 
-  const file       = files[activeFile];
+  const fileIndex  = files[activeFile] ? activeFile : 0;
+  const file       = files[fileIndex];
   const canPreview = Boolean(htmlFile);
 
   const handleCopy = () => {
@@ -184,10 +186,10 @@ export default function ArtifactPanel() {
                 key={f.name}
                 onClick={() => setActiveFile(index)}
                 className={`px-4 py-2.5 text-[11px] font-medium whitespace-nowrap transition-colors duration-150 border-r border-white/[0.05] relative cursor-pointer bg-transparent
-                  ${activeFile === index ? "text-blue-400" : "text-slate-500 hover:text-slate-300"}`}
+                  ${fileIndex === index ? "text-blue-400" : "text-slate-500 hover:text-slate-300"}`}
               >
                 {f.name}
-                {activeFile === index && (
+                {fileIndex === index && (
                   <motion.div layoutId="filetab" className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-500 rounded-t-full" />
                 )}
               </button>
@@ -241,13 +243,17 @@ export default function ArtifactPanel() {
               )}
             </motion.div>
           ) : (
-            <motion.div key={`code-${activeFile}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="w-full h-full">
-              <Editor
-                theme="vs-dark"
+            <motion.div key={`code-${fileIndex}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="w-full h-full overflow-auto">
+              <SyntaxHighlighter
                 language={detectLanguage(file?.name || "")}
-                value={file?.content || ""}
-                options={{ readOnly: true, minimap: { enabled: false }, fontSize: 13, wordWrap: "on", automaticLayout: true, scrollBeyondLastLine: false, padding: { top: 16 }, lineNumbers: "on", renderLineHighlight: "none" }}
-              />
+                style={oneDark}
+                showLineNumbers
+                wrapLongLines
+                lineNumberStyle={{ userSelect: "none" }}
+                customStyle={{ margin: 0, minHeight: "100%", padding: "16px", fontSize: "13px", overflowWrap: "anywhere" }}
+              >
+                {file?.content || ""}
+              </SyntaxHighlighter>
             </motion.div>
           )}
         </AnimatePresence>
