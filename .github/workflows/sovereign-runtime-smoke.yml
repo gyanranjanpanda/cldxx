@@ -66,6 +66,40 @@ jobs:
             -F 'incognito=false' -F 'prompt=Say hello in one short sentence.' \
             -F 'agent=chat' -F 'timezone=UTC' -o "$response"
           python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["zone"] == "SOVEREIGN" and d["answer"].strip(); print("local chat passed:", d["answer"][:120])' "$response"
+          curl -fsS http://127.0.0.1:8080/api/chat/search-saved-chats \
+            -H 'content-type: application/json' -b "$cookie" -d '{"query":"one short sentence"}' -o "$response"
+          python3 -c 'import json,sys; assert sys.argv[2] in json.load(open(sys.argv[1]))["ids"]' "$response" "$conversation"
+          archive=$(mktemp)
+          python3 - "$archive" <<'PY'
+          from zipfile import ZipFile
+          import json, sys
+          with ZipFile(sys.argv[1], "w") as archive:
+              archive.writestr("manifest.json", json.dumps({
+                  "format": "cldx-cloud-content", "version": 1, "sourceUserId": "fixture",
+                  "conversations": [{"id": "1" * 24, "title": "Public source"}],
+                  "messages": [{"id": "2" * 24, "conversationId": "1" * 24, "role": "user",
+                                "content": "Imported public canary [42].", "images": [], "artifacts": []}],
+                  "includedArtifacts": [],
+              }))
+          PY
+          curl -fsS http://127.0.0.1:8080/api/transfer/import \
+            -H 'content-type: application/zip' -b "$cookie" --data-binary "@$archive" -o "$response"
+          curl -fsS http://127.0.0.1:8080/api/chat/search-saved-chats \
+            -H 'content-type: application/json' -b "$cookie" -d '{"query":"public canary [42]"}' -o "$response"
+          imported=$(python3 -c 'import json,sys; ids=json.load(open(sys.argv[1]))["ids"]; assert len(ids) == 1; print(ids[0])' "$response")
+          docker compose exec -T app node --input-type=module - "$imported" <<'JS'
+          const response = await fetch("http://localhost:8000/internal/save-message", {
+            method: "POST",
+            headers: { "content-type": "application/json", "x-internal-key": process.env.INTERNAL_API_KEY },
+            body: JSON.stringify({
+              conversationId: process.argv[2], role: "user", sovereign: true, content: "Private follow-up canary.",
+            }),
+          });
+          if (!response.ok) throw new Error("Could not save private follow-up");
+          JS
+          curl -fsS http://127.0.0.1:8080/api/chat/search-saved-chats \
+            -H 'content-type: application/json' -b "$cookie" -d '{"query":"Private follow-up canary"}' -o "$response"
+          python3 -c 'import json,sys; assert json.load(open(sys.argv[1]))["ids"] == [sys.argv[2]]' "$response" "$imported"
           ./verify-containment.sh
       - name: Show service logs on failure
         if: failure()

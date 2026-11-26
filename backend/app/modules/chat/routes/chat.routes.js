@@ -1,5 +1,5 @@
 import express from "express";
-import { createConversation, deleteConversation, getConversations, getMessages, saveMessage, updateConversation } from "../controllers/chat.controller.js";
+import { createConversation, deleteConversation, getConversations, getMessages, saveMessage, searchSavedChats, updateConversation } from "../controllers/chat.controller.js";
 
 
 
@@ -8,6 +8,7 @@ express.Router();
 
 router.post("/create-conversation",createConversation);
 router.get("/get-conversations",getConversations);
+router.post("/search-saved-chats", searchSavedChats);
 router.post("/update-conversation",updateConversation);
 router.post("/save-message",saveMessage);
 router.get("/get-messages/:id",getMessages);

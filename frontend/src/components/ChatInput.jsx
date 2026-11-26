@@ -157,7 +157,7 @@ search:"Search the web..."
 
 };
 
-  const agents = AGENTS;
+  const agents = sovereign ? AGENTS.filter(agent => agent.id !== "search") : AGENTS;
 
 // ── Voice input ───────────────────────────────────────────────────────────
 // Recorded in the browser with MediaRecorder, transcribed server-side by

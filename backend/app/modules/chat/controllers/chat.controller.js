@@ -96,6 +96,47 @@ export const getConversations = async (req, res) => {
 
 };
 
+export const searchSavedChats = async (req, res) => {
+  if (process.env.LOCAL_AUTH_ENABLED !== "true" ||
+      req.sovereignPolicy !== "sovereign_only" || !sovereignStoreConfigured()) {
+    return res.sendStatus(404);
+  }
+
+  const userId = req.headers["x-user-id"];
+  if (!userId) return res.sendStatus(401);
+  const query = typeof req.body?.query === "string" ? req.body.query.trim() : "";
+  if (!query || query.length > 160) {
+    return res.status(400).json({ message: "Enter a search phrase of 1 to 160 characters." });
+  }
+
+  // Treat the query as literal text. Run both queries inside the local MongoDB
+  // databases and return only IDs for conversations owned by this account.
+  const match = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+  const localStores = [{ Conversation, Message }, sovereignModels()];
+  try {
+    const conversations = (await Promise.all(localStores.map(({ Conversation: Chats }) =>
+      Chats.find({ userId }).select("_id title updatedAt").lean().maxTimeMS(5000)
+    ))).flat();
+    const ownedIds = conversations.map((row) => row._id);
+    // Continuing an imported chat can write its private messages to the
+    // restricted store while the conversation row stays in the import store.
+    const messageMatches = await Promise.all(localStores.map(({ Message: Messages }) =>
+      Messages.distinct("conversationId", {
+        conversationId: { $in: ownedIds },
+        $or: [{ content: match }, { "artifacts.title": match }, { "artifacts.files.name": match }],
+      }).maxTimeMS(5000)
+    ));
+    const matchingIds = new Set(messageMatches.flat().map(String));
+    const matches = conversations
+      .filter((row) => matchingIds.has(String(row._id)) || match.test(row.title || ""))
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+    res.set("Cache-Control", "private, no-store");
+    return res.json({ ids: [...new Set(matches.map((row) => String(row._id)))].slice(0, 100) });
+  } catch {
+    return res.status(503).json({ message: "Local chat search is temporarily unavailable." });
+  }
+};
+
 export const saveMessage = async (req, res) => {
 
   try {

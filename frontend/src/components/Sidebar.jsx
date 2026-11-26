@@ -7,7 +7,7 @@ import {
 import { useDispatch, useSelector } from "react-redux";
 import api from "../utils/axios";
 import { setUserData } from "../redux/user.slice";
-import { deleteConversation, getConversations } from "../features/conversation.api";
+import { deleteConversation, getConversations, searchSavedChats } from "../features/conversation.api";
 import { removeConversation, setConversations, setIncognito, setSelectedAgent, setSelectedConversation } from "../redux/conversation.slice";
 import { getMessages } from "../features/message.api";
 import { setArtifacts, setMessages } from "../redux/message.slice";
@@ -84,14 +84,16 @@ export default function Sidebar() {
   const [sharing, setSharing]           = useState(null);
   const [searchOpen, setSearchOpen]     = useState(false);
   const [query, setQuery]               = useState("");
+  const [localMatches, setLocalMatches] = useState(null);
   const [agentsOpen, setAgentsOpen]     = useState(false);
   const [transferBusy, setTransferBusy] = useState(false);
   const [transferNotice, setTransferNotice] = useState("");
   const isLocalSovereign = import.meta.env.VITE_SOVEREIGN_ONLY === "true";
 
   const { userData } = useSelector(state => state.user);
-  const { conversations, selectedConversation, selectedAgent, incognito } = useSelector(state => state.conversation);
+  const { conversations, selectedConversation, selectedAgent, incognito, sovereign } = useSelector(state => state.conversation);
   const dispatch = useDispatch();
+  const availableAgents = sovereign ? AGENTS.filter(a => a.id !== "search") : AGENTS;
 
   const logout = async () => {
     try {
@@ -176,13 +178,37 @@ export default function Sidebar() {
     window.history.replaceState({}, document.title, window.location.pathname);
   }, [initialMcpNotice]);
 
+  const searchPhrase = query.trim();
+  const localSearch = isLocalSovereign && searchOpen && Boolean(searchPhrase);
+  useEffect(() => {
+    if (!localSearch || !userData?._id) return;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const ids = await searchSavedChats(searchPhrase, controller.signal);
+        if (!controller.signal.aborted) setLocalMatches({ phrase: searchPhrase, ids });
+      } catch {
+        if (!controller.signal.aborted) setLocalMatches({ phrase: searchPhrase, error: true });
+      }
+    }, 250);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [localSearch, searchPhrase, userData?._id, conversations]);
+
+  const currentMatches = localMatches?.phrase === searchPhrase ? localMatches : null;
   const groups = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    if (localSearch) {
+      const ids = new Set(currentMatches?.ids);
+      return groupByAge(conversations.filter(c => ids.has(c._id)));
+    }
+    const q = searchPhrase.toLowerCase();
     const filtered = q
       ? conversations.filter(c => (c.title || "").toLowerCase().includes(q))
       : conversations;
     return groupByAge(filtered);
-  }, [conversations, query]);
+  }, [conversations, searchPhrase, localSearch, currentMatches]);
 
   const handleCreateConversation = () => {
     // A normal new chat is also the way out of incognito -- otherwise the next
@@ -318,7 +344,7 @@ export default function Sidebar() {
 
         {/* The agent roster stays reachable in the rail — it is the one nav
             group that changes what the next message actually does. */}
-        {AGENTS.filter(a => a.id !== "auto").map((agent) => {
+        {availableAgents.filter(a => a.id !== "auto").map((agent) => {
           const Icon = agent.icon;
           const isActive = selectedAgent === agent.id;
           return (
@@ -436,9 +462,10 @@ export default function Sidebar() {
                 <input
                   autoFocus
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  onChange={(e) => { setLocalMatches(null); setQuery(e.target.value); }}
                   onKeyDown={(e) => e.key === "Escape" && toggleSearch()}
-                  placeholder="Search chats"
+                  placeholder={isLocalSovereign ? "Search local chats and messages" : "Search chats"}
+                  maxLength={isLocalSovereign ? 160 : undefined}
                   className="flex-1 min-w-0 bg-transparent border-none outline-none text-[13px] text-slate-200 placeholder:text-slate-600"
                 />
                 {query && (
@@ -495,7 +522,7 @@ export default function Sidebar() {
               <Sparkles size={15} className="shrink-0 text-slate-400" />
               <span className="flex-1">Agents</span>
               <span className="text-[10px] font-semibold uppercase tracking-wide text-blue-400/90">
-                {AGENTS.find(a => a.id === selectedAgent)?.label ?? "Auto"}
+                {availableAgents.find(a => a.id === selectedAgent)?.label ?? "Auto"}
               </span>
               <ChevronDown
                 size={13}
@@ -505,7 +532,7 @@ export default function Sidebar() {
 
             {agentsOpen && (
               <div className="pl-3 pb-0.5 space-y-0.5">
-                {AGENTS.map((agent) => {
+                {availableAgents.map((agent) => {
                   const Icon = agent.icon;
                   const isActive = selectedAgent === agent.id;
                   return (
@@ -541,7 +568,9 @@ export default function Sidebar() {
           <div className="flex-1 overflow-y-auto px-2.5 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {groups.length === 0 ? (
               <p className="px-2.5 pt-4 text-[12px] text-slate-600">
-                {query ? `No chats matching "${query}"` : "No conversations yet"}
+                {localSearch && !currentMatches ? "Searching saved chats…" :
+                  localSearch && currentMatches?.error ? "Local chat search is temporarily unavailable." :
+                  searchPhrase ? `No chats matching "${searchPhrase}"` : "No conversations yet"}
               </p>
             ) : (
               groups.map(([label, items]) => (

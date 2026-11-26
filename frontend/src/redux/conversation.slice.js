@@ -63,6 +63,7 @@ export const conversationSlice = createSlice({
   setSovereign: (state,action)=>{
 
    state.sovereign = import.meta.env.VITE_SOVEREIGN_ONLY === "true" || Boolean(action.payload);
+   if (state.sovereign && state.selectedAgent === "search") state.selectedAgent = "auto";
 
   },
 

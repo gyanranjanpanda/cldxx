@@ -1,5 +1,9 @@
 import api from "../utils/axios";
 
+export const searchSavedChats = async (query, signal) => {
+ const { data } = await api.post("/api/chat/search-saved-chats", { query }, { signal });
+ return data.ids;
+};
 
 export const getConversations =async()=>{
 
