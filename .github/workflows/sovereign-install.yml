@@ -43,6 +43,9 @@ jobs:
           [System.Management.Automation.Language.Parser]::ParseFile('deploy/sovereign/install.ps1', [ref]$tokens, [ref]$errors) | Out-Null
           if ($errors.Count) { throw ($errors | Out-String) }
           ./deploy/sovereign/tests/install-smoke.ps1
+      - name: Test Windows PowerShell 5.1
+        shell: powershell
+        run: .\deploy\sovereign\tests\install-smoke.ps1
 
   local-frontend:
     runs-on: ubuntu-latest

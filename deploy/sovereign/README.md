@@ -1,5 +1,7 @@
 # Sovereign installation
 
+**Windows PowerShell users:** run `.\install.ps1` from `cldxx\deploy\sovereign`. Do not run `./install.sh`: it is a Bash script for macOS and Linux, and Windows may open it in an editor without installing anything. If you already cloned the repository, do not clone it again; go to that folder and run `.\install.ps1`.
+
 This profile runs the web UI, gateway, agent, MongoDB, Redis, Qdrant, and Ollama on one Docker host. The gateway, agent, models, and data stores use an `internal: true` network with no route out. Only the web proxy also joins an ingress bridge so its loopback-published port works. The default profile has no cloud model credentials or external authentication. The browser is outside the Docker network, so host firewall and workstation controls still matter.
 
 ## Install on each user's own computer
@@ -8,7 +10,7 @@ Each person installs their own copy. Their models, account, conversations, and a
 
 Requirements: a running Docker Desktop (macOS/Windows) or Docker Engine with Compose v2 (Linux), enough free disk for models and containers, and preferably at least 8 GB of memory available to Docker. The installer selects smaller 1.5B chat and coding models plus a compact vision model; responses will be less capable than larger models. CPU-only inference may be slow. Mobile devices and machines that cannot run Docker are not supported.
 
-The repository is public. Each user can either use Git as shown below or download the [source ZIP](https://github.com/gyanranjanpanda/cldxx/archive/refs/heads/master.zip), extract it, and run the installer from `cldxx-master/deploy/sovereign`. With a ZIP download, use `bash install.sh` on macOS/Linux. On Windows, review `install.ps1`; if PowerShell blocks a downloaded file, run `Unblock-File .\install.ps1` before `./install.ps1`.
+The repository is public. Each user can either use Git as shown below or download the [source ZIP](https://github.com/gyanranjanpanda/cldxx/archive/refs/heads/master.zip), extract it, and run the installer from `cldxx-master/deploy/sovereign`. With a ZIP download, use `bash install.sh` on macOS/Linux or `.\install.ps1` on Windows.
 
 macOS or Linux:
 
@@ -22,9 +24,11 @@ Windows PowerShell:
 
 ```powershell
 git clone https://github.com/gyanranjanpanda/cldxx.git
-cd cldxx\deploy\sovereign
+Set-Location .\cldxx\deploy\sovereign
 .\install.ps1
 ```
+
+If PowerShell blocks the downloaded script, run `Unblock-File .\install.ps1` and retry. Docker Desktop must be installed and running before either installer starts.
 
 Create a password when prompted, then open **http://127.0.0.1:8080** on that same computer and sign in as `admin`. The installer creates a private `.env`, downloads models into a local Docker volume, builds and starts the services, and checks that the application network is isolated. Do not share the `.env` file. Running the installer again reuses the same account and volumes.
 
